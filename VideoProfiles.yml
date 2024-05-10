@@ -1,0 +1,68 @@
+#  VideoPresets.yml defines preset settings profiles for encoding video
+#
+# The file VideoPresets_Example.yml provides a fully commented version of this
+# file. Check that for more info on the parameters below.
+#
+
+default:
+    encoder: libx264
+    file_ext:  .mkv
+    pixel_format: yuv420p
+    max_frames_per_file: 2500
+    ffmpeg_debug_out: False
+    preset: fast
+    crf: 26
+
+mjpeg:
+    encoder: mjpeg
+    #quality: 80
+    pixel_format: yuvj420p
+    file_ext:  .mkv
+    max_frames_per_file: 2500
+    ffmpeg_debug_out: False
+
+x265-fast:
+    encoder: libx265
+    preset: fast
+    crf: 26
+    pixel_format: yuv420p
+    file_ext:  .mkv
+    max_frames_per_file: 5000
+    ffmpeg_debug_out: False
+
+x264-fast:
+    encoder: libx264
+    preset: fast
+    crf: 26
+    pixel_format: yuv420p
+    file_ext:  .mkv
+    max_frames_per_file: 5000
+    ffmpeg_debug_out: False
+
+
+# If your ffmpeg has been compiled with the --enable-nvenc option you may be able to use
+# the nvidia hardware accelerated codecs for encoding video. This also requires specific
+# hardware and drivers
+
+# More information regarding the hardware and driver requirements for these codecs
+#  https://developer.nvidia.com/nvidia-video-codec-sdk/download
+#
+# This has been tested and works on Windows 10
+# ffmpeg.exe -y -s 2048x1536 -pixel_format bgr24 -f rawvideo -r 30 -i pipe: -c:v hevc_nvenc -pix_fmt yuv420p -preset fast -crf 26 test.mp4
+hevc_nvenc-fast:
+    encoder: hevc_nvenc
+    preset: fast
+    crf: 26
+    pixel_format: yuv420p
+    file_ext:  .mkv
+    max_frames_per_file: 1000
+    ffmpeg_debug_out: True
+
+# Supposedly V4L2 provides an interface for hardware accelerated encoding on linux but
+# as of now, this isn't working on the only tested platform: RPi4 + ubuntu 20.04.3 LTS 64-bit
+h264_linux_hw:
+    encoder: h264_v4l2m2m
+    pixel_format: nv21 #yuv420p
+    file_ext:  .mkv
+    max_frames_per_file: 1000
+    ffmpeg_debug_out: True

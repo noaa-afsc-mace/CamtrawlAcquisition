@@ -1,0 +1,138 @@
+# CamtrawlAcquisition.yml
+#
+# For more info about the sections and various parameters see
+# CamtrawlAcquisition_Example.yml.
+#
+
+
+system:
+
+    ntp_sync_clock_at_boot: False
+    ntp_sync_while_deployed: False
+    ntp_server_address: 192.168.0.99
+    wifi_disable_while_deployed: False
+
+
+application:
+
+    output_mode: separate
+    output_path: C:/camtrawl/data
+    log_level: INFO
+    always_trigger_at_start: True
+    shut_down_on_exit: False
+
+    disk_free_monitor: True
+    disk_free_min_mb: 150
+    disk_free_check_int_ms: 5000
+
+
+acquisition:
+
+    trigger_rate: 4
+    trigger_limit: -1
+
+
+server:
+
+    start_server: True
+    server_interface: 0.0.0.0
+    server_port: 7889
+
+
+controller:
+
+    use_controller: True
+    serial_port: COM3
+    baud_rate: 921600
+    strobe_pre_fire:  100
+    strobe_channel: 3
+
+
+sensors:
+
+    default_type: synchronous
+    synchronous_timeout: 5
+
+    installed_sensors:    
+        # altimeter:
+            # type: asynchronous
+            # add_header: $ALTIM
+            # logging_interval_ms: 1000
+            # serial_port: /dev/ttyUSB1
+            # serial_baud: 9600
+            
+        # thrusters:
+            # type: asynchronous
+            # logging_interval_ms: 500
+            # serial_port: /dev/ttyUSB0
+            # serial_baud: 9600
+            
+        # clumpweight:
+            # type: asynchronous
+            # logging_interval_ms: 1000
+            # serial_port: socket://192.168.10.5:2345
+            # serial_baud: 115200
+
+cameras:
+
+    default:
+        gain: 25
+        exposure_us: 1000
+        label: right
+        rotation:  None
+        trigger_divider: 1
+        sensor_binning: 2
+
+        save_stills: True
+        still_image_divider: 12
+        still_image_extension: .jpg
+        jpeg_quality: 85
+        image_scale: 100
+
+        save_video: False
+        video_preset: x264-fast
+        video_scale:  100
+        video_frame_divider: 1
+
+#    Chameleon3 CM3-U3-31S4M_16081034:
+#        gain: 25
+#        exposure_us: 1000
+#        label: right
+#        rotation:  None
+#        trigger_divider: 1
+#        trigger_source: Hardware
+#        controller_trigger_port: 1
+#        sensor_binning: 2
+#
+#        save_stills: True
+#        still_image_divider: 5
+#        still_image_extension: .jpg
+#        jpeg_quality: 85
+#        image_scale: 100
+#
+#        save_video: True
+#        video_preset: x264-fast
+#        video_scale:  100
+#        video_frame_divider: 1
+#
+#
+#    Chameleon3 CM3-U3-31S4C_16153944:
+#        gain: 25
+#        exposure_us: 1000
+#        label: left
+#        rotation:  None
+#        trigger_divider: 5
+#        trigger_source: Hardware
+#        controller_trigger_port: 2
+#        sensor_binning: 2
+#
+#        save_stills: True
+#        still_image_extension: .jpg
+#        still_image_divider: 5
+#        jpeg_quality: 80
+#        image_scale: 100
+#
+#        save_video: False
+#        video_preset: x264-fast
+#        video_scale:  100
+#        video_frame_divider: 1

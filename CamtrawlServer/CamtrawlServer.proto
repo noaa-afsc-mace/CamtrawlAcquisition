@@ -1,0 +1,138 @@
+syntax = "proto2";
+
+package CamtrawlPB;
+
+//  msg wraps all other messages and contains the embedded message type and serialized data
+message msg {
+
+    // define the message types
+    enum msgType {
+        GETCAMERAINFO = 0;
+        GETSENSORINFO = 1;
+        GETIMAGE = 2;
+        GETSENSOR = 3;
+        SETSENSOR = 4;
+        GETPARAMETER = 5;
+        SETPARAMETER = 6;
+        JPEGDATA = 7;
+        CVMATDATA = 8;
+        SENSORDATA = 9;
+        PARAMDATA = 10;
+    }
+
+    required msgType type = 1;
+    required bytes data = 2;
+}
+
+message cameraInfo {
+
+    message camera {
+        required string name = 1;
+        required string label = 2;
+    }
+
+    repeated camera cameras = 1;
+}
+
+message getImage {
+
+    enum imageType {
+        CVMAT = 0;
+        JPEG = 1;
+    }
+
+    repeated string cameras = 1;
+    required imageType type = 2;
+    optional float scale = 3 [default = 100.0];
+    optional uint32 quality = 4 [default = 75];
+}
+
+message jpeg {
+    required string camera = 1;
+    required uint32 image_number = 2;
+    required double timestamp = 3;
+    required int32 width = 4;
+    required int32 height = 5;
+    required int32 exposure = 6;
+    required float gain = 7;
+    required bytes jpg_data = 8;
+    required string filename = 9;
+    required string label = 10;
+}
+
+message cvMat {
+    required string camera = 1;
+    required uint32 image_number = 2;
+    required double timestamp = 3;
+    required int32 rows = 4;
+    required int32 cols = 5;
+    required int32 depth = 6;
+    required int32 exposure = 7;
+    required float gain = 8;
+    required string elt_type = 9;
+    required uint32 elt_size = 10;
+    required bytes mat_data = 11;
+    required string filename = 12;
+    required string label = 13;
+}
+
+
+enum sensorType {
+    SYNC = 0;
+    ASYNC = 1;
+}
+
+message sensor {
+    required string id = 1;
+    required string header = 2;
+    required double timestamp = 3;
+    required string data = 4;
+    optional sensorType type = 5;
+}
+
+message getRequest {
+    required string id = 1;
+    required string header = 2;
+}
+
+message getSensorData {
+    required string id = 1;
+}
+
+message setSensorData {
+    repeated sensor sensors = 1;
+}
+
+message sensorData {
+    repeated sensor sensors = 1;
+}
+
+message sensorInfo {
+    message sensor {
+        required string id = 1;
+        repeated string header = 2;
+    }
+    repeated sensor sensors = 1;
+}
+
+
+message getParameter {
+    required string module = 1;
+    required string parameter = 2;
+}
+
+message setParameter {
+    required string module = 1;
+    required string parameter = 2;
+    required string value = 3;
+}
+
+message parameterData {
+    required string module = 1;
+    required string parameter = 2;
+    required string value = 3;
+    required int32 ok = 4;
+    required string error_string = 6;
+}
+
+

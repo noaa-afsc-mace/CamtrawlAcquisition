@@ -1,0 +1,96 @@
+# SimpleAcquisition.yml
+#
+# For more info about the sections and various parameters see
+# SimpleAcquisition_Example.yml.
+#
+
+application:
+
+    output_mode: separate
+    output_path: C:/camtrawl/data
+    #output_path: /home/camtrawl/camtrawl_data
+    database_name: CamtrawlMetadata.db3
+    log_level: INFO
+    shut_down_on_exit:  False
+    ffmpeg_path: ./ffmpeg/bin
+    #ffmpeg_path:
+
+
+acquisition:
+
+    trigger_rate: 10
+    trigger_limit: 100
+
+
+server:
+
+    start_server: True
+    server_interface: 0.0.0.0
+    server_port: 7889
+
+
+sensors:
+
+    default_type: synchronous
+    synchronous_timeout: 5
+
+    installed_sensors:    
+        # GPS:
+            # serial_port: /dev/ttyUSB1
+            # serial_baud: 4800
+            # synced_headers: [$GPGGA,$GPRMC]
+            # async_headers: [$GPZDA]
+
+
+cameras:
+
+
+    default:
+
+        gain: 25
+        exposure_us: 4000
+        label: camera
+        # rotation values: none, cw90, cw180, cw270, fliplr, flipud
+        rotation:  None
+        sensor_binning: 1
+
+        save_stills: True
+        still_image_extension: .jpg
+        jpeg_quality: 90
+        image_scale: 100
+
+        save_video: True
+        video_preset: x264-fast
+        video_scale:  50
+
+        hdr_enabled: False
+        hdr_save_merged:  True
+        hdr_signal_merged:  False
+        hdr_merge_method:  mertens
+        hdr_save_format:  hdr
+        hdr_response_file: None
+        hdr_tonemap_gamma: 2.0
+        hdr_tonemap_saturation: 1.0
+        hdr_tonemap_bias: 0.85
+
+        hdr_settings:
+            Image1:
+                exposure: 1000
+                gain: 15
+                emit_signal: False
+                save_image:  True
+            Image2:
+                exposure: 2500
+                gain: 15
+                emit_signal: False
+                save_image: True
+            Image3:
+                exposure: 5000
+                gain: 20
+                emit_signal: False
+                save_image:  True
+            Image4:
+                exposure: 10000
+                gain:  20
+                emit_signal: False
+                save_image:  True

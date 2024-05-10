@@ -1,0 +1,486 @@
+# CamtrawlAcquisition.yml
+#
+# This file provides configuration parameters for CamtrawlAcquisition.py
+#
+# If a configuration parameter defined below is commented or missing, the default value
+# will be used. Defaults are defined at the top of CamtrawlAcquisition.py
+#
+
+#  specify some system options
+#
+#
+system:
+
+    #  Set ntp_sync_clock_at_boot to attempt to sync the computer's clock to an NTP server
+    #  when the system boots. Depending on how long it takes the NTP server to respond,
+    #  it is possible the deployment folder may be created using an incorrect time. This
+    #  shouldn't be an issue if you are regularly booting into maintenance mode while
+    #  the NTP server is available to download images.
+    ntp_sync_clock_at_boot: False
+
+    #  Set ntp_sync_while_deployed to True to have the system try to sync the clock while
+    #  in deployed mode. The default is False because it is assumed that a network
+    #  connection will not be available when the system is deployed.
+    ntp_sync_while_deployed: False
+
+    #  Set ntp_server_address to the network address of the NTP server to use for time sync.
+    ntp_server_address:  192.168.0.99
+
+    #  Set wifi_disable_while_deployed to True to disable all RF radios when the
+    #  camtrawl controller reports that the system is "at depth" aka "deployed".
+    #  The system is in this state when the depth > turn on depth or when the
+    #  pressure switch IO line is low. This means WiFi and Bluetooth will be
+    #  disabled during the deployment.
+    #
+    #  Disabling the WiFi radio reduces power consumption around 1/2 to 3/4 watt.
+    #  That's not a lot, but for long term deployments every little bit can help.
+    #
+    #  Currently this option is only available on Linux based systems.
+    wifi_disable_while_deployed: False
+
+
+#  specify some general application settings
+application:
+
+    # Set the mode of collection.
+    #
+    # The Camtrawl platform defines one on/off cycle as a deployment. Traditionally, data from
+    # a deployment would be written to a directory named after the date and time the system
+    # was powered on. This works well when each on/off cycle is a separate deployment, such
+    # as when a camera system is deployed on a net during a trawl. Data for that deployment
+    # is contained within the single folder
+    #
+    # But, this doesn't make sense for long term deployments where the camera system
+    # is turned on and off periodically to collect a few images. In these cases, the deployment
+    # is not a single on/off event so it is not desirable to log data to a separate folder each
+    # time the system is powered on.
+    #
+    # The output_mode can be used to specify how data are organized when collected to
+    # support both of these use cases:
+    #
+    #    Set output_mode to "separate" to collect data in separate folders for each on/off
+    #    cycle. This is the traditional Camtrawl behavior. In this case, output_path will define
+    #    where these deployment folders will be written. For example, if output_path is set
+    #    to c:\data, the application will create deployment folders below that like
+    #    c:\data\D20210101-T120024
+    #
+    #    Set output_mode to "combined" to collect data in a single folder for each on/off
+    #    cycle. In this case, output_path defines the single folder where all data will be written.
+    #    When the system powers on in combined mode, it determines how many existing
+    #    images have been collected, updates the image counter, and adds additional images
+    #    to the specified directory.
+    output_mode: separate
+
+    #  Define the path to the directory where the data will be written. The data directories
+    #  will automatically be created within this directory.
+    #output_path: /camtrawl/image_data
+    output_path: C:/camtrawl/data
+
+    #  specify the name of the SQLite metadata database file.
+    database_name: CamtrawlMetadata.db3
+
+    # You can control the amount of info that is output to the log, also known as the log level.
+    # This can be set, in increasing verboseness, to ERROR, WARNING, INFO, or DEBUG. Normally
+    # you would set this to INFO.
+    log_level: INFO
+
+    # Set always_trigger_at_start to True to always start triggering when the application
+    # starts regardless of the system state. Normally the system will only start triggering
+    # in "deployed" mode. This can be enabled for testing. It can also be used to force the
+    # system to acquire on deck prior to deployment when the pressure sensor/switch fails.
+    always_trigger_at_start: False
+
+    # Set shut_down_on_exit to True to have the application shut the computer down when the
+    # application exits. This is the normal behavior for a deployed Camtrawl system. This
+    # can be disabled for testing.
+    shut_down_on_exit:  False
+
+    # Set the path to the directory containing the ffmpeg executable used to encode video
+    # files. Leave this empty to use the ffmpeg found on the system PATH. Typically this
+    # will be blank but if Windows users have not added ffmpeg to their PATH, they can set
+    # the path here. Relative paths will be converted to absolute paths using the
+    # CamtrawlAcquisition directory as the base.
+    #
+    # Most linux systems have ffmpeg in their package repositories. Windows users can
+    # download binaries from https://www.ffmpeg.org/download.html
+
+    #  Windows users can download ffmpeg and unzip it in the ffmpeg folder in the
+    #  CamtrawlAcquisition directory:
+    ffmpeg_path: ./ffmpeg/bin
+
+    #  Linux users will most likely want to leave this empty.
+    #ffmpeg_path:
+
+    #  Set disk_free_monitor to True to have the acquisition application periodically check
+    #  the disk free space and stop acquiring if the free space drops below the specified
+    #  minimum value in megabytes. Completely filling a disk can cause issues with camera
+    #  operation and it is advised to enable this feature. If omitted, the default value
+    #  is True.
+    disk_free_monitor: True
+
+    #  Set disk_free_min_mb to the minimum free space in megabytes that should be left on
+    #  the image data disk. If omitted, the default value is 150 MB
+    disk_free_min_mb: 150
+
+    #  Set disk_free_check_int_ms to the interval in milliseconds between disk free checks.
+    #  If omitted, the default value is 5000 ms (5 seconds)
+    disk_free_check_int_ms: 5000
+
+
+#  specify some details about how fast and how many times cameras should be triggered
+acquisition:
+
+    # Specify the camera triggering rate in TRIGGERS PER SECOND. Note that the realized
+    # acquisition rate for each camera may be affected by camera specific settings. The
+    # upper end of the trigger rate will depend on the speed of the acquisition PC. If
+    # the commanded rate is higher than the rate the hardware can support, the realized
+    # rate will be whatever the hardware can do.
+    #
+    # Example values:     5 = 5 images per second
+    #                   0.5 = 1 image every 2 seconds
+    #                0.0167 = 1 image per minute
+    trigger_rate: 5
+
+    # Specify the number of triggers that should be generated by the application before
+    # exiting. Set to -1 to trigger indefinitely. Note that the global trigger counter
+    # is used when determining if the trigger limit has been met. Camera specific settings
+    # may result in fewer images being recorded.
+    trigger_limit: 500
+
+
+# The Camtrawl server provides a command and control interface and serves up image and
+# sensor data on the network. It can be used in conjunction with the Camtrawl client in
+# applications for remote viewing and control of the system.
+server:
+    start_server: True
+
+    # specify the network interface (by IP) where the server should listen. Use the
+    # address 0.0.0.0 to open a connection on all interfaces.
+    server_interface: 0.0.0.0
+
+    # specify the port number the server should listen on. the default is 7889
+    server_port: 7889
+
+
+# This section is for setting basic parameters used by the Camtrawl Controller which is a
+# hardware device that provides power management, sensor integration, and triggering for
+# the Camtrawl stereo camera platform.
+controller:
+    # The Camtrawl Controller is a hardware device that provides power, sensor data, on/off
+    # control, and synchronized hardware triggering for the Camtrawl system. It is not
+    # required to run this software.
+
+    #  set this to True if you are using a Camtrawl controller
+    use_controller: False
+
+    #  the controller connects to the acquisition PC using a serial interface. Set the
+    #  port the controller is connected to here. For Windows this will be something like
+    #  "COM3". For Linux systems it will be something like "/dev/ttyUSB0"
+    serial_port: COM3
+
+    #  set the baud rate. The Arduino based Camtrawl Controller runs at 921600
+    baud_rate: 921600
+
+    #  specify the time, in microseconds, that the strobes are triggered prior to the
+    #  cameras being triggered. This provides time for LED strobes to ramp to full
+    #  intensity.
+    strobe_pre_fire:  100
+
+    # The Camtrawl Controller has two strobe trigger channels. Here you can set the
+    # channel(s) that will be triggered when the camera acquires an image. Set
+    # strobe_channel=1 to trigger channel 1, set strobe_channel=2 to trigger channel 2
+    # and set strobe_channel=3 to trigger both. The correct setting depends on how
+    # your strobes are connected to the controller.
+    strobe_channel: 3
+
+
+#  The sensors section contains configuration details for the handling of sensor data.
+#  The acquisition application can log NMEA-0183 like serial data from local devices,
+#  network ports, or RFC2217 compatible serial servers. The data must be comma
+#  delimited ASCII text terminated by \n or \n\r and the first field should uniquely
+#  identify the data.
+#
+#  Data can be logged in sync with the images, where the most recent data will be
+#  written at the same time the cameras are triggered, and it can also be logged
+#  at the time it is received or asynchronously. Synced data is written to the 
+#  metadata database sensor_data table and async data is written to the
+#  async_data table. Data in the sensor_data table is logged with the image number
+#  it is synced with and data in the async_data table includes the time the data was
+#  received.
+#
+#  You can also send data to sensors (via CamtrawlServer) to operate polled sensors
+#  or other devices.
+sensors:
+
+    #  if a sensor header is unknown, it will be logged as the default type. Specify
+    #  if the default is to log data synchronously or asynchronously.
+    default_type: synchronous
+
+    #  synchronous sensor data is cached when received and written to disk when
+    #  the cameras are triggered and it is associated with an image number. List the
+    #  headers here for sensor datagrams that should be logged as synchronous.
+
+    #  asynchronous sensor data is written to disk when received. List the
+    #  headers here for sensor datagrams that should be logged as asynchronous.
+
+
+    #  synchronous_timeout specifies how long synced sensor data will be cached
+    #  (in seconds.) Data older than this will be ignored and data for that sensor 
+    #  will not be logged until fresh data is received. Set this to -1 to always
+    #  log synced sensor data regardless of freshness.
+    synchronous_timeout: 5
+
+    #  specify any additional sensors that should be logged during acquisition. 
+    installed_sensors:    
+        #  Specify the name of the sensor - the sensor names must be unique
+        #altimeter:        
+            # Specify asynchronous or synchronous logging for this sensors datagrams.
+            # Datagrams whose headers aren't explicitly configured as synced_headers
+            # or async_headers will be logged this way. If type is omitted, the sensor
+            # will be logged as specified in default_type above.
+            #type: asynchronous
+            # If needed, you can configure sync and async logging for individual datagram
+            # types by defining the headers in the synced_headers and/or async_headers
+            # list. If these fields are omitted, all datagrams will be logged according to
+            # the type (specified above)
+            #synced_headers: [$GPGGA]
+            #async_headers: [$GPZDA]
+            #  Specify the serial port. This is passed directly to pySerial and can be a local 
+            #  serial port like "COM3" or "/dev/ttyUSB0" or "rfc2217://192.168.10.1:12345" or
+            #   "socket://192.168.0.10:98765" See the pySerial documentation for more info.
+            #serial_port: COM4
+            #  Specify the baud rate of this sensors serial port. I believe this would be ignored
+            #  for network based ports.
+            #serial_baud: 9600
+            # For sensors that do not generate a header, you can add one by including the
+            # add_header parameter. Set this to the string that will be prepended to the sensor
+            # data when it is received. This allows you to more easily ID this data. If omitted
+            # nothing is prepended to the data when received. For example, the altimeter
+            # defined here only outputs a height off bottom as "123.4m\n". By setting add_header
+            # to "$ALTIM" the camera system will see this data as "$ALTIM,123.4m\n"
+            #add_header: $ALTIM
+            # You can specify a logging interval to log data in the database at a slower rate
+            # than it is being received to limit the volume of data stored in the database.
+            # Data is still made available to the system (including the server) at the sesnor's
+            # output rate, this only affects the rate it is logged in te database. This only
+            # has an effect on async sensors. Sync'd sensors are always written when an image
+            # is acquired.
+            #logging_interval_ms: 1000
+
+        # thrusters:
+            # type: asynchronous
+            # logging_interval_ms: 500
+            # serial_port: /dev/ttyUSB0
+            # serial_baud: 9600
+            
+        # clumpweight:
+            # type: asynchronous
+            # logging_interval_ms: 1000
+            # serial_port: socket://192.168.10.5:2345
+            # serial_baud: 115200
+    
+    
+# Define the individual camera parameters
+cameras:
+
+    # The acquisition application will first look for camera specific settings that
+    # are in sections defined using the camera name and serial number (for example
+    # Chameleon3 CM3-U3-50S5M_16306616). If a camera specific setting is found, the
+    # settings in that section will be used to configure that camera.
+    #
+    # If a camera specific section cannot be found for a specific camera, the "default"
+    # section will be used for that camera. If no default section exists either, that
+    # camera will not be configured and will be ignored by the application.
+
+    # The default camera properties are applied if a specific camera entry cannot be
+    # found. The "default" section is not required and is normally omitted in deployed
+    # systems but it is included here to ensure that the the application can acquire
+    # images with minimal initial configuration.
+    default:
+        # Specify the gain in dB - valid values depend on the camera used
+        gain: 16
+
+        # Specify the exposure in microseconds - valid values depend on the camera used
+        exposure_us: 8000
+
+        # Specify the camera label - this is written to the camera table in the metadata database
+        # and can be used by downstream applications to help users identify the camera. For
+        # example 'left' or 'right' for stereo systems.
+        label: camera
+
+        # Specify the rotation to be applied to the image before saving or emitting image data
+        # values: none, cw90, cw180, cw270, fliplr, flipud
+        rotation:  None
+
+        # Specify the sensor binning. If supported by your camera, sensor binning allows you
+        # to combine adjacent pixels on the image sensor to increase the cameras sensitivity
+        # at the expense of resolution. The value specified here are the number of N x N
+        # that are combined. The upper limit will depend on your camera, but typical values are:
+        #
+        #    1 - no binning. Image is acquired at full resolution
+        #    2 - 2x2 binning for an image that is 1/4 the original size
+        #    4 - 4x4 binning for an image that is 1/16 the original size.
+        #
+        # Not all cameras support 4x4 binning. The value specified must be 1,2, or 4. Other
+        # values will result in sensor binning set to 1 (disabled)
+        sensor_binning: 1
+
+        # Set trigger divider to control when this camera responds to a trigger signal.
+        # When this value divides evenly into the total number of triggers, this camera
+        # will be triggered.
+        trigger_divider: 1
+
+        # Set the save image divider to control when this camera saves images it acquires.
+        # When this value divides evenly into the total number of triggers, this camera
+        # will save the image.
+        save_image_divider: 1
+
+        # Specify how this camera will be triggered. Options are "Software" or "Hardware".
+        # If you specify "Hardware" triggering you must be using the Camtrawl controller
+        # or your own interface to the hardware trigger device.
+        trigger_source: Software
+
+        # Specify if this camera should save still images.
+        save_stills: True
+
+        # Specify the format the images are saved in. The supported formats will be those
+        # supported by OpenCV on your platform. For Windows JPEG (.jpeg, .jpg, .jpe),
+        # PNG (.png) and TIFF (.tiff, .tif) formats are always supported. It is possible
+        # that PEG 2000 (.jp2) is supported but this is untested. On Linux, OpenCV uses
+        # the OS's image IO libraries so you may need to install them to get support for
+        # a specific format.
+        still_image_extension: .jpg
+
+        # Set the still image divider to control when this camera saves stills. When this
+        # value divides evenly into the total number of triggers, this camera will save
+        # a still image.
+        still_image_divider: 1
+
+        # If saving JPEG images, specify the JPEG quality setting (1-99). Lower values
+        # create smaller files at the expense of image detail. Reasonable values range
+        # between 70-95.
+        jpeg_quality: 85
+
+        # Set image_scale to a value used to scale the image before saving. The value is
+        # a percent of the original size and the default value is 100 (unscaled).
+        image_scale: 100
+
+        # (experimental) Specify if this camera should save video files.
+        save_video: False
+
+        # (experimental) Specify the video "preset" defined in the VideoProfiles.yml that
+        # will be used to set up the video encoder. Tuning parameters for various encoders
+        # can be tricky, the idea is to define some known good configurations that can be
+        # easily copied and further tuned for specific applications. See VideoProfiles.yml
+        # for more info.
+        video_preset: x264-fast
+
+        # Set video_scale to a value used to scale the image before saving. The value is
+        # a percent of the original size and the default value is 100 (unscaled).
+        video_scale:  100
+
+        # (experimental) Set video_force_framerate to override the framerate value passed to
+        # the video encoder. By default, the system acquisition rate is used but not all encoders
+        # are happy with typical camera system acquisition rates so it can be changed here.
+        # If this parameter is set to -1 or omitted, the system framerate will be used.
+        video_force_framerate: -1
+
+        # Set the video frame divider to control when this camera saves a frame to the video
+        # file. When this value divides evenly into the total number of triggers, this camera
+        # will write the image to the video file.
+        video_frame_divider: 1
+
+
+        # The following settings apply to High Dynamic Range (HDR) image collection. When HDR is
+        # enabled, the camera will collect a sequence of exposures and optionally process and
+        # save the data. Your camera must support HDR capture for this to work.
+
+        # Set hdr_enabled to True to utilize the camera's HDR sequencer to acquire 4 images
+        # sequentially for each "trigger". You camera must support HDR sequencing.
+        hdr_enabled: False
+
+        # (Experimental) Set hdr_save_merged to True to save the merged HDR image to disk. There is
+        # a lot to learn when implementing HDR merging in OpenCV and what I have implemented at the
+        # moment is really lacking. At this point it is advised that if you collect HDR images, you
+        # merge them after acquisition.
+        hdr_save_merged:  False
+
+        # Set hdr_signal_merged to True to emit an imageData signal containing the merged HDR image data
+        hdr_signal_merged:  False
+
+        # (Experimental) Specify the merge method when merging HDR exposures. The merge method
+        # can be: mertens, robertson or debevec
+        # More information can be found in the OpenCV documentation
+        #            mertens uses exposure fusion and is not a true "HDR" output
+        hdr_merge_method:  mertens
+
+        # (Experimental) HDR images can be saved as jpg, or
+        hdr_save_format:  hdr
+
+        # (not implemented) Specify the path to a numpy file containing the camera response curves which
+        # are used in some HDR merge methods.
+        hdr_response_file: None
+
+        # (Experimental) Specify some tone mapping parameters used during HDR merging. See OpenCV docs
+        # for more information.
+        hdr_tonemap_gamma: 2.0
+        hdr_tonemap_saturation: 1.0
+        hdr_tonemap_bias: 0.85
+
+        # hdr_settings defines the details of each HDR exposure. When HDR collection is enabled, these
+        # values will override any other exposure and gain settings.
+        #
+        # Flir/PGR cameras support 4 exposure HDR sequences so there are 4 repeated sections below. The
+        # HDR sequence progresses from Image1 to Image4.
+        #
+        hdr_settings:
+            Image1:
+                # Specify the exposure of this image in the sequence (in microseconds)
+                exposure: 1000
+                # Specify the gain for this image in the sequence. Min/Max values depend on the camera.
+                gain: 15
+                # set emit_signal to True to have this camera emit an imageData signal for this
+                # image in the sequence.
+                emit_signal: False
+                # set save_image to True to write this image in the sequence to disk.
+                save_image:  True
+            Image2:
+                exposure: 2500
+                gain: 15
+                emit_signal: False
+                save_image: True
+            Image3:
+                exposure: 5000
+                gain: 20
+                emit_signal: False
+                save_image:  True
+            Image4:
+                exposure: 10000
+                gain:  20
+                emit_signal: False
+                save_image:  True
+
+
+    #  Here are some examples of camera specific settings. The settings in this
+    #  section only apply to the camera specified. Parameters that aren't specified
+    #  here will be set to their default values.
+
+    Chameleon3 CM3-U3-50S5M_16306616:
+        #  We'll set gain, exposure, and the label here. All other parameters for
+        #  this camera will be set to their default value.
+        gain: 18
+        exposure_us: 1000
+        label: right
+
+    Blackfly BFLY-PGE-50S5M_17219622:
+        #  For this camera we also set gain, exposure, and the label but this camera
+        #  is mounted upside down so we set the rotation and we also want to record
+        #  video scaled to 50%.
+        gain: 18
+        exposure_us: 1000
+        label: left
+        rotation: cw180
+        save_video: True
+        video_preset: x264-fast
+        video_scale: 50
+
