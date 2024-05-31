@@ -37,7 +37,7 @@ default:
 
     # set max_frames_per_file to specify the max number of frames a video file should
     # contain. When a video file reaches this point it is closed and a new file is opened.
-    max_frames_per_file: 1000
+    max_frames_per_file: 5000
 
     # set ffmpeg_debug_out to True to send the output from ffmpeg to a file so you
     # can debug issues with configuring or profiling encoding. A text file named after
@@ -50,10 +50,29 @@ default:
     # parameters using ffmpeg. For example to list the parameters for libx274:
     #     ffmpeg -h encoder=libx264
 
-    # For the libx264 encoder we'll set the preset to "fast"
+    # A preset is a collection of options that will provide a certain encoding speed to
+    # compression ratio. For the libx264 encoder valid presets are:
+    #
+    #   ultrafast
+    #   superfast
+    #   veryfast
+    #   faster
+    #   fast
+    #   medium – default preset
+    #   slow
+    #   slower
+    #   veryslow
+    #
+    # For realtime encoding it is highly recommended to select a preset on the faster
+    # side of the list.
     preset: fast
-    # and we set the quality level for constant quality mode
-    crf: 26
+
+    # and we set the quality level for constant quality mode. Smaller values result in
+    # higher quality output, larger files, and slower encoding. The range is exponetial
+    # so increasing 6 results in 2x bitrate and file size, decreasing 6 results in half the
+    # bitrate and file size. Full range is 0-51. Sane values for x264 range from 17-28
+    crf: 23
+
 
 
 mjpeg:
@@ -61,28 +80,9 @@ mjpeg:
     #quality: 80
     pixel_format: yuvj420p
     file_ext:  .mkv
-    max_frames_per_file: 1000
+    max_frames_per_file: 2500
     ffmpeg_debug_out: False
 
-
-x265-fast:
-    encoder: libx265
-    preset: fast
-    crf: 26
-    pixel_format: yuv420p
-    file_ext:  .mkv
-    max_frames_per_file: 1000
-    ffmpeg_debug_out: False
-
-
-x264-fast:
-    encoder: libx264
-    preset: fast
-    crf: 26
-    pixel_format: yuv420p
-    file_ext:  .mkv
-    max_frames_per_file: 1000
-    ffmpeg_debug_out: False
 
 
 # If your ffmpeg has been compiled with the --enable-nvenc option you may be able to use

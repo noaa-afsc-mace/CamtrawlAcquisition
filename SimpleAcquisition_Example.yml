@@ -6,6 +6,15 @@
 # will be used. Defaults are defined at the top of SimpleAcquisition.py
 #
 
+#  specify metadata elements common to all deployments for a cruise/survey. This information
+#  (and more) is stored in the deployments table in the metadata database.
+metadata:
+    vessel_name:
+    survey_name: Example Survey
+    camera_name: Camtrawl-1
+    survey_description:
+
+
 #  specify some general application settings
 application:
 
@@ -45,6 +54,12 @@ application:
 
     #  specify the name of the SQLite metadata database file.
     database_name: CamtrawlMetadata.db3
+
+    #  specify the path to the calibration folder. If this folder exists, it will be copied into the
+    #  deployment data folder. It is intended to allow camera calibration files to follow the data
+    #  they are associated with. It is up to the user to calibrate their camera system and create
+    #  this folder and copy their calibration file(s) here. If this folder doesn't exist, nothing is done.
+    calibration_path: ./calibration
 
     # You can control the amount of info that is output to the log, also known as the log level.
     # This can be set, in increasing verboseness, to ERROR, WARNING, INFO, or DEBUG. Normally
@@ -108,6 +123,28 @@ acquisition:
     # may result in fewer images being recorded.
     trigger_limit: 500
 
+    #  set this to True to log the video frames in the metadata 'images' table. When writing
+    #  videos at higher frame rates,
+    video_log_frames: False
+
+    # Set the video_sync_data_divider to control when synchronous sensor data is written
+    # to the database when saving video files. Since video frame rates are usually greater
+    # than the rate you want to store "synchronous" data at, this divider can be used to
+    # slow the rate down. If you're recording at ~15 frames/sec, and this divider is set to
+    # 15, the system would log "synced" sensor data ~ once/second. This divider operates
+    # after the video_frame_divider and is global to all cameras so you may get unexpected
+    # results if you are recording video from multiple cameras that have different
+    # video_frame_divider values.
+    video_sync_data_divider: 15
+
+    # Set the still_sync_data_divider to control when synchronous sensor data is written
+    # to the database when saving still images. The default value is 1 and should only be
+    # changed if you really know what you are doing.  This divider operates after the
+    # save_image_divider and is global to all cameras so you may get unexpected
+    # results if you are saving stills from multiple cameras that have different
+    # save_image_divider values.
+    still_sync_data_divider: 1
+
 
 # The Camtrawl server provides a command and control interface and serves up image and
 # sensor data on the network. It can be used in conjunction with the Camtrawl client in
@@ -131,7 +168,7 @@ server:
 #
 #  Data can be logged in sync with the images, where the most recent data will be
 #  written at the same time the cameras are triggered, and it can also be logged
-#  at the time it is received or asynchronously. Synced data is written to the 
+#  at the time it is received or asynchronously. Synced data is written to the
 #  metadata database sensor_data table and async data is written to the
 #  async_data table. Data in the sensor_data table is logged with the image number
 #  it is synced with and data in the async_data table includes the time the data was
@@ -155,15 +192,15 @@ sensors:
     asynchronous: []
 
     #  synchronous_timeout specifies how long synced sensor data will be cached
-    #  (in seconds.) Data older than this will be ignored and data for that sensor 
+    #  (in seconds.) Data older than this will be ignored and data for that sensor
     #  will not be logged until fresh data is received. Set this to -1 to always
     #  log synced sensor data regardless of freshness.
     synchronous_timeout: 5
 
-    #  specify any additional sensors that should be logged during acquisition. 
-    installed_sensors:    
+    #  specify any additional sensors that should be logged during acquisition.
+    installed_sensors:
         #  Specify the name of the sensor - the sensor names must be unique
-        #altimeter:        
+        #altimeter:
             # Specify asynchronous or synchronous logging for this sensors datagrams.
             # Datagrams whose headers aren't explicitly configured as synced_headers
             # or async_headers will be logged this way. If type is omitted, the sensor
@@ -175,7 +212,7 @@ sensors:
             # the type (specified above)
             #synced_headers: [$GPGGA]
             #async_headers: [$GPZDA]
-            #  Specify the serial port. This is passed directly to pySerial and can be a local 
+            #  Specify the serial port. This is passed directly to pySerial and can be a local
             #  serial port like "COM3" or "/dev/ttyUSB0" or "rfc2217://192.168.10.1:12345" or
             #   "socket://192.168.0.10:98765" See the pySerial documentation for more info.
             #serial_port: COM4
@@ -202,16 +239,19 @@ sensors:
             # logging_interval_ms: 500
             # serial_port: /dev/ttyUSB0
             # serial_baud: 9600
-            
+
         # clumpweight:
             # type: asynchronous
             # logging_interval_ms: 1000
             # serial_port: socket://192.168.10.5:2345
             # serial_baud: 115200
-    
-    
+
+
 # Define the individual camera parameters
 cameras:
+
+    # The camera section is used to define which cameras should be used to acquire
+    # images and their settings. It is comprised
 
     # The acquisition application will first look for camera specific settings that
     # are in sections defined using the camera name and serial number (for example
@@ -226,8 +266,18 @@ cameras:
     # found. The "default" section is not required and is normally omitted in deployed
     # systems but it is included here to ensure that the the application can acquire
     # images with minimal initial configuration.
+
+    # Starting with version 4.3, support for acquiring images using the OpenCV
+    # VideoCapture class was added. This change required some additional configuration
+    # parameters to be added. Also, because of the way VideoCapture works, many
+    # of the configuration settings below may not or will not work. This is an active
+    # area of development and the documentation may take some time to catch up.
+
     default:
-        # Specify the gain in dB - valid values depend on the camera used
+        # Specify the gain. Values are specific to the driver and camera you are using. It is
+        # your responsibility to set reasonable values. Setting gain is always supported
+        # when using the SpinCamera driver but may not be supported when using the
+        # CV2VideoCapture driver.
         gain: 15
 
         # Specify the exposure in microseconds - valid values depend on the camera used
@@ -394,6 +444,12 @@ cameras:
                 gain:  20
                 emit_signal: False
                 save_image:  True
+
+    Webcam_1:
+        label: webcam
+        driver:  CV2VideoCapture
+        cv2_cam_path: 1
+
 
 
     #  Here are some examples of camera specific settings. The settings in this

@@ -61,7 +61,7 @@ def exitHandler(a,b=None):
         #  make sure we only act on the first ctrl-c press
         ctrlc_pressed = True
         print("CTRL-C detected. Shutting down...")
-        acquisition.StopAcquisition(exit_app=True)
+        acquisition.ExternalStop()
 
     return True
 
@@ -78,7 +78,7 @@ def signal_handler(*args):
         #  make sure we only act on the first ctrl-c press
         ctrlc_pressed = True
         print("CTRL-C or SIGTERM/SIGHUP detected. Shutting down...")
-        acquisition.StopAcquisition(exit_app=True)
+        acquisition.ExternalStop()
 
     return True
 

@@ -34,9 +34,11 @@
 
 import os
 import sys
+import glob
 import datetime
 import logging
 import functools
+import importlib
 import platform
 import subprocess
 import collections
@@ -51,18 +53,20 @@ import google.protobuf
 import yaml
 import numpy as np
 import cv2
-import SpinCamera
-import PySpin
 from SerialMonitor import SerialMonitor
 from CamtrawlServer import CamtrawlServer
 
 
 class AcquisitionBase(QtCore.QObject):
 
+    #  specify the application version
+    VERSION = '4.3'
+
     # CAMERA_CONFIG_OPTIONS defines the default camera configuration options.
     # These values are used if not specified in the configuration file.
     CAMERA_CONFIG_OPTIONS = {'exposure_us':4000,
                              'gain':18,
+                             'driver': 'SpinCamera',
                              'label':'Camera',
                              'rotation':'none',
                              'trigger_divider': 1,
@@ -90,28 +94,19 @@ class AcquisitionBase(QtCore.QObject):
                              'video_frame_divider': 1,
                              'video_scale': 100}
 
-    #DEFAULT_VIDEO_PROFILE defines the default options for the 'default' video profile.
+    #  DEFAULT_VIDEO_PROFILE defines the default options for the 'default' video profile.
     DEFAULT_VIDEO_PROFILE = {'encoder':'libx265',
                               'file_ext':'.mp4',
                               'preset':'fast',
-                              'crf':26,
+                              'crf':23,
                               'pixel_format':'yuv420p',
-                              'max_frames_per_file': 1000,
+                              'max_frames_per_file': 5000,
                               'ffmpeg_debug_out': False}
 
-    #  define PyQt Signals
-    sensorData = QtCore.pyqtSignal(str, str, datetime.datetime, str)
-    stopAcquiring = QtCore.pyqtSignal(list)
-    startAcquiring = QtCore.pyqtSignal((list, str, bool, dict, bool, dict))
-    trigger = QtCore.pyqtSignal(list, int, datetime.datetime, bool, bool)
-    stopServer = QtCore.pyqtSignal()
-
-    #  parameterChanged is used to respond to Get and SetParam
-    #  requests from CamtrawlServer
-    parameterChanged = QtCore.pyqtSignal(str, str, str, bool, str)
-
-    #  specify the application version
-    VERSION = '4.2'
+    #  VALID_DRIVERS contains the names of camera drivers available to the system.
+    #  If a camera specifies a different driver than one listed here, it will be
+    #  ignored. Driver names should be entered in lower case.
+    VALID_DRIVERS = ['spincamera', 'cv2videocapture']
 
     #  specify the maximum number of times the application will attempt to open a
     #  metadata db file when running in combined mode and the original db file
@@ -125,6 +120,21 @@ class AcquisitionBase(QtCore.QObject):
     #  specify how many times we will timeout waiting for threads to finish when
     #  shutting down the application.
     TEARDOWN_TRIES = 12
+
+    #  specify the maximum number of files allowed in the calibration folder. If
+    #  more files exist, the copy is skipped. The calibration folder should only have
+    #  one or a few calibration files and this is a simple sanity check to prevent
+    #  gross misconfigurations filling up the disk copying the wrong directory.
+    MAX_CAL_FOLDER_FILES = 10
+
+    #  define PyQt Signals
+    sensorData = QtCore.pyqtSignal(str, str, datetime.datetime, str)
+    stopAcquiring = QtCore.pyqtSignal(list)
+    startAcquiring = QtCore.pyqtSignal((list, str, bool, dict, bool, dict))
+    trigger = QtCore.pyqtSignal(list, int, datetime.datetime, bool, bool)
+    stopServer = QtCore.pyqtSignal()
+    parameterChanged = QtCore.pyqtSignal(str, str, str, bool, str)
+    stopApp = QtCore.pyqtSignal(bool)
 
     def __init__(self, config_file=None, profiles_file=None, parent=None):
 
@@ -149,11 +159,14 @@ class AcquisitionBase(QtCore.QObject):
         self.isTriggering = False
         self.serverThread = None
         self.server = None
-        self.system = None
+        self.spin_system = None
         self.diskStatTimer = None
+        self.spin_cameras = {}
         self.cameras = {}
         self.threads = []
+
         self.hw_triggered_cameras = []
+        self.sync_trigger_messages = []
         self.received = {}
         self.use_db = True
         self.syncdSensorData = {}
@@ -161,10 +174,15 @@ class AcquisitionBase(QtCore.QObject):
         self.acqisition_teardown_tries = 0
         self.serial_threads_finished = False
         self.server_finished = False
+        self.saved_last_still = False
+        self.saved_last_frame = False
+        self.n_saved_frames = 0
+        self.n_saved_stills = 0
 
         #  create the default configuration dict. These values are used for application
         #  configuration if they are not provided in the config file.
         self.configuration = {}
+        self.configuration['metadata'] = {}
         self.configuration['application'] = {}
         self.configuration['acquisition'] = {}
         self.configuration['cameras'] = {}
@@ -173,6 +191,7 @@ class AcquisitionBase(QtCore.QObject):
 
         self.configuration['application']['output_mode'] = 'separate'
         self.configuration['application']['output_path'] = './data'
+        self.configuration['application']['calibration_path'] = './calibration'
         self.configuration['application']['log_level'] = 'INFO'
         self.configuration['application']['database_name'] = 'CamtrawlMetadata.db3'
         self.configuration['application']['shut_down_on_exit'] = False
@@ -184,6 +203,9 @@ class AcquisitionBase(QtCore.QObject):
 
         self.configuration['acquisition']['trigger_rate'] = 5
         self.configuration['acquisition']['trigger_limit'] = -1
+        self.configuration['acquisition']['video_log_frames'] = False
+        self.configuration['acquisition']['video_sync_data_divider'] = 15
+        self.configuration['acquisition']['still_sync_data_divider'] = 1
 
         self.configuration['server']['start_server'] = False
         self.configuration['server']['server_port'] = 7889
@@ -194,6 +216,11 @@ class AcquisitionBase(QtCore.QObject):
         self.configuration['sensors']['asynchronous'] = []
         self.configuration['sensors']['synchronous_timeout_secs'] = 5
         self.configuration['sensors']['installed_sensors'] = {}
+
+        self.configuration['metadata']['vessel_name'] = ''
+        self.configuration['metadata']['survey_name'] = ''
+        self.configuration['metadata']['camera_name'] = 'Camtrawl'
+        self.configuration['metadata']['survey_description'] = ''
 
         #  Create an instance of metadata_db which is a simple interface to the
         #  camtrawl metadata database
@@ -223,6 +250,9 @@ class AcquisitionBase(QtCore.QObject):
         self.shutdownTimer = QtCore.QTimer(self)
         self.shutdownTimer.setSingleShot(True)
 
+        #  connect the stopApp signal to the stopAcquisition method.
+        self.stopApp.connect(self.StopAcquisition)
+
         #  continue the setup after QtCore.QCoreApplication.exec_() is called
         #  by using a timer to call AcquisitionSetup. This ensures that the
         #  application event loop is running when AcquisitionSetup is called.
@@ -236,11 +266,22 @@ class AcquisitionBase(QtCore.QObject):
         '''AcquisitionSetup reads the configuration files, creates the log file,
         opens up the metadata database, and sets up the cameras.
         '''
+
+        def import_module(module_name):
+            '''import_module imports the Python module specified my module_name
+            into the global namespace. This method is used to dynamically import
+            camera driver modules at runtime.
+            '''
+            module_handle = importlib.import_module(module_name)
+            setattr(sys.modules[__name__], module_name, module_handle)
+
+
         #  bump the prompt
         print()
 
         #  get the application start time
-        start_time_string = datetime.datetime.now().strftime("D%Y%m%d-T%H%M%S")
+        start_time = datetime.datetime.now()
+        start_time_string = start_time.strftime("D%Y%m%d-T%H%M%S")
 
         #  read the configuration file - we start with the default values and
         #  recursively update them with values from the config file in the
@@ -321,19 +362,31 @@ class AcquisitionBase(QtCore.QObject):
             #  we failed to copy the settings?
             self.logger.warning("Unable to copy settings files to " + settings_dir)
 
+        #  copy the calibration files - this allows one to include camera calibration files
+        #  with the collected data. We only do this if a calibration folder exists and if it
+        #  contains fewer than the max allowed number of files.
+        try:
+            cal_path = os.path.normpath(self.configuration['application']['calibration_path'])
+            dest_dir = os.path.normpath(self.base_dir + os.sep + 'calibration')
+            if os.path.exists(cal_path):
+                #  first do a sanity check on the number of files - since this is a blind
+                #  recursive copy, we limit the total number of files to a handful
+                n_check = glob(os.path.join(cal_path, '**', '*'), recursive=True)
+
+                if n_check > self.MAX_CAL_FOLDER_FILES:
+                    #  too many files in the cal folder
+                    self.logger.warning("Unable to copy calibration folder. Too many files!")
+                else:
+                    #  there seems to be a sane number of files - copy the directory
+                    shutil.copytree(cal_path, dest_dir)
+                    self.logger.info("Copied calibration folder to " + dest_dir)
+        except:
+            #  we failed to copy the settings?
+            self.logger.warning("Unable to copy calibration folder to " + dest_dir)
+
+
         #  log file is set up and directories created. Get some basic info into the logs
         self.logger.info("Camtrawl Acquisition Starting...")
-
-        try:
-            #  set up the camera interface
-            self.system = PySpin.System.GetInstance()
-        except:
-            #  if we can't create the logging dir we bail
-            self.logger.critical("Error obtaining PySpin system instance. Have you installed the " +
-                    "Spinnaker SDK and PySpin correctly?")
-            self.logger.critical("Application exiting...")
-            QtCore.QCoreApplication.instance().quit()
-            return
 
         #  report versions
         self.logger.info('Platform: %s %s' % (platform.system(), platform.release()))
@@ -341,11 +394,117 @@ class AcquisitionBase(QtCore.QObject):
         self.logger.info('Numpy version: %s' % (np.__version__))
         self.logger.info('OpenCV version: %s' % (cv2.__version__))
         self.logger.info('protobuf version: %s' % (google.protobuf.__version__))
-        self.logger.info('PyQt5 version: %s' % (QtCore.QT_VERSION_STR))
-        version = self.system.GetLibraryVersion()
-        self.logger.info('Spinnaker/PySpin library version: %d.%d.%d.%d' % (version.major,
-                version.minor, version.type, version.build))
+        self.logger.info('PyQt version: %s' % (QtCore.QT_VERSION_STR))
         self.logger.info("CamtrawlAcquisition version: " + self.VERSION)
+
+        #  create a list of enumerated cameras and determine what camera drivers
+        #  we will need. Then do any initial setup that is required for the drivers.
+        self.logger.info("Enumerating cameras...")
+        self.enumerated_cameras = []
+        drivers = []
+        configured_cams = list(self.configuration['cameras'].keys())
+        for camera in configured_cams:
+            #  check if the driver parameter exists (it may not since the default
+            #  camera configuration values have not been merged yet so if it isn't
+            #  explicitly set in the config file, it will not exist.)
+            if 'driver' in self.configuration['cameras'][camera]:
+                #  it does, add this driver to the dict if needed
+                driver = self.configuration['cameras'][camera]['driver'].lower()
+                #  make sure we know about this driver
+                if driver not in self.VALID_DRIVERS:
+                    self.logger.warning("Camera '" + camera + "' has an unknown driver '" + camera['driver'] +
+                            "' specified. This camera will be ignored.")
+                    continue
+                #  we do, so we add it to the list, if needed
+                if driver not in drivers:
+                    drivers.append(driver)
+            else:
+                #  there is no 'driver' parameter specified. We will default to
+                #  SpinCamera to provide backwards compatibility.
+                driver = 'spincamera'
+                if 'spincamera' not in drivers:
+                    drivers.append(driver)
+
+            #  add this camera to the list of enumerated cameras
+            if camera.lower() != 'default':
+                self.enumerated_cameras.append(camera)
+
+        #  now, do any initial setup required by the driver(s)
+        for driver in drivers:
+            if driver == 'spincamera':
+                self.logger.info("At least one camera is configured to use the SpinCamera driver." +
+                        "Initializing SpinCamera...")
+                try:
+                    #  do our imports - we want to import these globally so we use
+                    import_module('PySpin')
+                    import_module('SpinCamera')
+
+                    #  set up the camera interface
+                    self.spin_system = PySpin.System.GetInstance()
+                    spin_cameras = self.spin_system.GetCameras()
+
+                    #  now add the cameras spin can enumerate to our list if enumerated cameras
+                    #  if they aren't already there.
+                    for camera in spin_cameras:
+
+                        #  extract the camera name from the Spin camera pointer - 'tis a
+                        #  bit complicated....
+                        device_info = {}
+                        nodemap_tldevice = camera.GetTLDeviceNodeMap()
+                        node_device_information = PySpin.CCategoryPtr(nodemap_tldevice.GetNode('DeviceInformation'))
+                        if PySpin.IsAvailable(node_device_information) and PySpin.IsReadable(node_device_information):
+                            features = node_device_information.GetFeatures()
+                            for feature in features:
+                                node_feature = PySpin.CValuePtr(feature)
+                                device_info[node_feature.GetName()] = (node_feature.ToString()
+                                        if PySpin.IsReadable(node_feature) else 'Node not readable')
+
+                        #  for spinnaker cameras, we create the camera name using the model name,
+                        #  underscore and the serial number.
+                        camera_name = device_info['DeviceModelName'] + '_' + \
+                                device_info['DeviceSerialNumber']
+
+                        self.spin_cameras[camera_name] = camera
+
+                        if camera_name not in self.enumerated_cameras:
+                            self.enumerated_cameras.append(camera_name)
+
+                except:
+                    #  if we can't initialize this driver we bail
+                    self.logger.critical("Error obtaining PySpin system instance. Have you installed the " +
+                            "Spinnaker SDK and PySpin correctly?")
+                    self.logger.critical("Application exiting...")
+                    QtCore.QCoreApplication.instance().quit()
+                    return
+                version = self.spin_system.GetLibraryVersion()
+                self.logger.info('Spinnaker/PySpin library version: %d.%d.%d.%d' % (version.major,
+                        version.minor, version.type, version.build))
+
+            elif driver == 'cv2videocapture':
+                self.logger.info("At least one camera is configured to use the " +
+                        "CV2VideoCapture driver. Importing CV2VideoCapture...")
+                try:
+                    #import CV2VideoCapture
+                    import_module('CV2VideoCapture')
+
+                except:
+                    #  if we can't import this driver we bail
+                    self.logger.critical("Error importing CV2VideoCapture!")
+                    self.logger.critical("Application exiting...")
+                    QtCore.QCoreApplication.instance().quit()
+                    return
+
+        #  report the number of cameras found
+        num_cameras = len(self.enumerated_cameras)
+        if num_cameras == 0:
+            self.logger.critical("Enumeration complete. No cameras found!")
+            self.logger.critical("Application exiting...")
+            QtCore.QCoreApplication.instance().quit()
+            return
+        elif num_cameras == 1:
+            self.logger.info('Enumeration complete. 1 camera found.')
+        else:
+            self.logger.info('Enumeration complete. %d cameras found.' % num_cameras)
 
         #  note the config files we loaded
         self.logger.info("Configuration file loaded: " + self.config_file)
@@ -353,13 +512,21 @@ class AcquisitionBase(QtCore.QObject):
         self.logger.info("Logging data to: " + self.base_dir)
 
         #  set the default_is_synchronous sensor data property
-        if self.configuration['sensors']['default_type'].lower in ['synchronous', 'syncd', 'sync', 'synced']:
+        if self.configuration['sensors']['default_type'].lower() in ['synchronous', 'syncd', 'sync', 'synced']:
             self.default_is_synchronous = True
         else:
             self.default_is_synchronous = False
 
         #  open/create the image metadata database file
         self.OpenDatabase()
+
+        #  insert the metadata metadata
+        if self.use_db:
+            self.db.set_metadata_info(self.configuration['metadata']['vessel_name'],
+                    self.configuration['metadata']['survey_name'],
+                    self.configuration['metadata']['camera_name'],
+                    self.configuration['metadata']['survey_description'],
+                    start_time)
 
         #  log the acquisition rate and max image count
         self.logger.info("Acquisition Rate: %d images/sec   Max image count: %d" %
@@ -566,9 +733,10 @@ class AcquisitionBase(QtCore.QObject):
 
 
     def ConfigureCameras(self):
+
         """
-        ConfigureCameras runs through the cameras visible to Spinnaker and configures
-        cameras according to the settings in the camera section of the configuration file.
+        ConfigureCameras runs through the cameras and configures them according to the settings
+        in the camera section of the configuration file.
         """
         #  initialize some properties
         self.cameras = {}
@@ -580,36 +748,53 @@ class AcquisitionBase(QtCore.QObject):
         self.hwTriggered = False
 
         # Retrieve list of cameras from the system
-        self.logger.info('Getting available cameras...')
-        cam_list = self.system.GetCameras()
-        self.num_cameras = cam_list.GetSize()
-
-        if (self.num_cameras == 0):
-            self.logger.critical("No cameras found!")
-            return False
-        elif (self.num_cameras == 1):
-            s = 'camera'
-            self.logger.info('1 camera found.')
-        else:
-            s = 'cameras'
-            self.logger.info('%d cameras found.' % self.num_cameras)
-
-        self.logger.info("Configuring " + s + ":")
+        self.logger.info('Configuring cameras...')
 
         #  work thru the list of discovered cameras
-        for cam in cam_list:
-
-            #  create an instance of our spin_camera class
-            sc = SpinCamera.SpinCamera(cam)
+        for cam in self.enumerated_cameras:
 
             #  check config data for settings for this camera. This will get config params
             #  for this camera from the config data we read earlier. It will also return
             #  a boolean indicating whether the camera should be utilized or not.
-            add_camera, config = self.GetCameraConfiguration(sc.camera_name)
+            add_camera, config = self.GetCameraConfiguration(cam)
 
             if add_camera:
                 #  we have an entry for this camera so we'll use it
-                self.logger.info("  Adding: " + sc.camera_name)
+                self.logger.info("  Adding: " + cam)
+
+                #  create an instance of the appropriate camera driver class
+                if config['driver'].lower() == 'spincamera':
+                    #  create a camera object that uses Flir Spinnaker/PySpin as the
+                    #  interface to the camera.
+
+                    sc = SpinCamera.SpinCamera(self.spin_cameras[cam])
+
+                    #  get the exposure config value for this driver
+                    this_exposure = config['exposure_us']
+
+                elif config['driver'].lower() == 'cv2videocapture':
+                    #  create a camera object that uses CV2.VideoCapture as the
+                    #  interface to the camera.
+
+                    #  get some params required at instantiation
+                    resolution = [None, None]
+                    if 'cv2_cam_width' in config:
+                        resolution[0] = int(config['cv2_cam_width'])
+                    if 'cv2_cam_height' in config:
+                        resolution[1] = int(config['cv2_cam_height'])
+                    if 'cv2_cam_path' not in config:
+                        cam_path = 0
+                    else:
+                        cam_path = config['cv2_cam_path']
+
+                    #  get the exposure config value for this driver
+                    this_exposure = config['exposure']
+
+                    try:
+                        sc = CV2VideoCapture.CV2VideoCapture(cam_path, cam, resolution=resolution)
+                    except Exception as e:
+                        self.logger.warning("Unable to instantiate driver for camera '" + cam + "'")
+                        self.logger.warning("    Error: " + str(e))
 
                 #  set up the options for saving image data
                 image_options = {'file_ext':config['still_image_extension'],
@@ -659,7 +844,7 @@ class AcquisitionBase(QtCore.QObject):
                         link_speed = sc.device_info['DeviceLinkSpeed']
                     self.db.update_camera(sc.camera_name, sc.device_info['DeviceID'], sc.camera_id,
                             config['label'], config['rotation'], sc.device_info['DeviceVersion'],
-                            link_speed)
+                            str(link_speed))
 
                 # Set the camera's label
                 sc.label = config['label']
@@ -698,7 +883,7 @@ class AcquisitionBase(QtCore.QObject):
                 #ok = sc.set_strobe_trigger(1)
 
                 #  set the camera exposure, gain, and rotation
-                sc.set_exposure(config['exposure_us'])
+                sc.set_exposure(this_exposure)
                 sc.set_gain(config['gain'])
                 sc.rotation = config['rotation']
                 self.logger.info('    %s: label: %s  gain: %d  exposure_us: %d  rotation:%s' %
@@ -858,6 +1043,10 @@ class AcquisitionBase(QtCore.QObject):
         for cam_name in self.cameras:
             self.received[cam_name] = False
 
+        #  reset the per trigger save image/frame state
+        self.saved_last_still = False
+        self.saved_last_frame = False
+
         #  note the trigger time
         self.trig_time = datetime.datetime.now()
 
@@ -877,15 +1066,22 @@ class AcquisitionBase(QtCore.QObject):
         #       image numbers. For example, 143.1, 143.2, 143.3, 143.4
 
         #  and write synced sensor data  to the db
-        for sensor_id in self.syncdSensorData:
-            for header in self.syncdSensorData[sensor_id]:
-                #  check if the data is fresh
-                freshness = self.trig_time - self.syncdSensorData[sensor_id][header]['time']
-                if ((self.configuration['sensors']['synchronous_timeout_secs'] < 0) or
-                    (abs(freshness.total_seconds()) <= self.configuration['sensors']['synchronous_timeout_secs'])):
-                    #  it is fresh enough. Write it to the db
-                    self.db.insert_sync_data(self.n_images, self.syncdSensorData[sensor_id][header]['time'],
-                            sensor_id, header, self.syncdSensorData[sensor_id][header]['data'])
+        if self.use_db:
+            self.sync_trigger_messages = []
+            for sensor_id in self.syncdSensorData:
+                for header in self.syncdSensorData[sensor_id]:
+                    #  check if the data is fresh
+                    freshness = self.trig_time - self.syncdSensorData[sensor_id][header]['time']
+                    if ((self.configuration['sensors']['synchronous_timeout_secs'] < 0) or
+                        (abs(freshness.total_seconds()) <= self.configuration['sensors']['synchronous_timeout_secs'])):
+                        #  it is fresh enough. Write it to the db - in order to selectively write sync
+                        #  data based on still/video frame and implement sync data dividers as a method
+                        #  for reducing data volume, we store the sync values here and then write them
+                        #  in CamTriggerComplete where we know what was saved.
+                        self.sync_trigger_messages.append([self.n_images, self.syncdSensorData[sensor_id][header]['time'],
+                                sensor_id, header, self.syncdSensorData[sensor_id][header]['data']])
+                        #self.db.insert_sync_data(self.n_images, self.syncdSensorData[sensor_id][header]['time'],
+                        #        sensor_id, header, self.syncdSensorData[sensor_id][header]['data'])
 
 
     @QtCore.pyqtSlot(str, str, dict)
@@ -909,10 +1105,21 @@ class AcquisitionBase(QtCore.QObject):
             #  Only store the image file name, no path info
             filename = Path(image_data['filename']).name
 
+            #  note if we have saved a still or video frame for this trigger cycle.
+            if image_data['save_still']:
+                if not self.saved_last_still:
+                    self.saved_last_still = True
+                    self.n_saved_stills += 1
+            if image_data['save_frame']:
+                if not self.saved_last_frame:
+                    self.saved_last_frame = True
+                    self.n_saved_frames += 1
+
             if self.use_db:
-                #  only write an entry in the images table if we have saved the
-                #  image in some way (as a still or a video frame)
-                if image_data['save_still'] or image_data['save_frame']:
+                #  only write an entry in the images table if we have saved a still or
+                #  if we saved a video frame and log_video_frames == True
+                if (image_data['save_still'] or (self.configuration['acquisition']['log_video_frames'] and
+                        image_data['save_frame'])):
                     self.db.add_image(self.n_images, cam_name, self.trig_time, filename,
                             image_data['exposure'], image_data['gain'], image_data['save_still'],
                             image_data['save_frame'])
@@ -933,12 +1140,33 @@ class AcquisitionBase(QtCore.QObject):
         #  note that this camera has completed the trigger event
         self.received[cam_obj.camera_name] = True
 
-        #  enit some debugging info
+        #  emit some debugging info
         self.logger.debug(cam_obj.camera_name + ': Trigger Complete.')
 
         #  check if all triggered cameras have completed the trigger sequence
         if (all(self.received.values())):
-            #  all cameras are done. Increment our counters
+
+            #  they have - check if we should write synced sensor data to the db
+            if self.use_db:
+                write_sync = False
+                #  check if we saved this still and the total number of saved stills is evenly
+                #  divisible by the still_sync_data_divider
+                if ((self.n_saved_stills % self.configuration['acquisition']['still_sync_data_divider']) != 0 and
+                        self.saved_last_still):
+                    #  it is, so we'll write the data
+                    write_sync = True
+                #  if not, then we check for the same thing with the video frames
+                elif ((self.n_saved_frames % self.configuration['acquisition']['video_sync_data_divider']) != 0 and
+                        self.saved_last_frame):
+                    write_sync = True
+                if write_sync:
+                    #  write all of the sync messages we cached when the cameras were triggered.
+                    for sync_message in self.sync_trigger_messages:
+                            message_data = self.sync_trigger_messages[sync_message]
+                            self.db.insert_sync_data(message_data[0],message_data[1],message_data[2],
+                                    message_data[3],message_data[4])
+
+            #  Increment our counters
             self.n_images += 1
             self.this_images += 1
 
@@ -1166,10 +1394,10 @@ class AcquisitionBase(QtCore.QObject):
         '''
 
         # Now we can release the Spinnaker system instance
-        if (self.system):
+        if (self.spin_system):
             self.logger.debug("Releasing Spinnaker system instance...")
-            self.system.ReleaseInstance()
-            self.system = None
+            self.spin_system.ReleaseInstance()
+            self.spin_system = None
 
         #  if we're supposed to shut the PC down on application exit,
         #  get that started here.
@@ -1351,8 +1579,7 @@ class AcquisitionBase(QtCore.QObject):
 
             else:
                 # When we're not running in combined mode, we will always be creating
-                # a new db file. If we cannot open a *new* file, we'll assume the
-                # file system is not writable and we'll exit the application.
+                # a new db file. If we cannot open a *new* file, we'll proceed as best we can.
                 self.logger.error('Error opening SQLite database file ' + dbFile +'.')
                 self.logger.error('  Acquisition will continue without the database but ' +
                             'this situation is not ideal.')
@@ -1648,6 +1875,15 @@ class AcquisitionBase(QtCore.QObject):
 
         # Update/extend the configuration values and return
         return self.__update(config_dict, config)
+
+
+    def ExternalStop(self):
+        '''
+        ExternalStop is called when one of the main thread exit handlers are called.
+        It emits a stop signal that is then received by the QCoreApplication which then
+        shuts everything down in the QCoreApplication thread.
+        '''
+        self.stopApp.emit(True)
 
 
     def __update(self, d, u):

@@ -120,8 +120,8 @@ class CamtrawlServer(QtCore.QObject):
 
                     #  parse the datagram to get type
                     request = CamtrawlServer_pb2.msg()
-                    request.ParseFromString(self.clients[thisSocket]['buffer']
-                        [0:self.clients[thisSocket]['datagramSize']])
+                    request.ParseFromString(bytes(self.clients[thisSocket]['buffer']
+                        [0:self.clients[thisSocket]['datagramSize']]))
 
                     #  parse the data based on the datagram type
                     if (request.type == CamtrawlServer_pb2.msg.msgType.Value('GETIMAGE')):
@@ -288,7 +288,7 @@ class CamtrawlServer(QtCore.QObject):
                     #  no scaling - send original image
                     data = image_data['data']
 
-                #  build the reponse based on the request image type
+                #  build the response based on the request image type
                 if (imgRequest.type == CamtrawlServer_pb2.getImage.imageType.Value('CVMAT')):
 
                     #  build the cvMat payload object

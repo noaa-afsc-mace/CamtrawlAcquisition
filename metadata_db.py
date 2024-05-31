@@ -136,6 +136,17 @@ class metadata_db(QtCore.QObject):
         query.exec_()
 
 
+    def set_metadata_info(self, vessel_name, survey_name, camera_name, description, deployment_time):
+
+        time_str = self.datetime_to_db_str(deployment_time)
+        sql = ("INSERT INTO deployment (survey_name,vessel_name,camera_name,survey_description,deployment_time) " +
+                "VALUES ('" + survey_name + "','" + vessel_name + "','" + camera_name + "','" +
+                description + "','" + time_str + "')")
+
+        query = QtSql.QSqlQuery(sql, self.db)
+        query.exec_()
+
+
     def set_image_extension(self, extension):
 
         sql = ("INSERT INTO deployment_data (deployment_parameter,parameter_value) " +
@@ -173,7 +184,8 @@ class metadata_db(QtCore.QObject):
                "CREATE TABLE dropped (number INTEGER NOT NULL, camera TEXT NOT_NULL, time TEXT, PRIMARY KEY(number,camera))",
                "CREATE TABLE sensor_data (number INTEGER NOT NULL, time TEXT NOT NULL, sensor_id TEXT NOT NULL, header TEXT NOT NULL, data TEXT, PRIMARY KEY(number,time,sensor_id,header))",
                "CREATE TABLE async_data (time TEXT NOT NULL, sensor_id TEXT NOT NULL, header TEXT NOT NULL, data TEXT, PRIMARY KEY(time,sensor_id,header))",
-               "CREATE TABLE deployment_data (deployment_parameter TEXT NOT NULL, parameter_value TEXT NOT NULL, PRIMARY KEY(deployment_parameter))"]
+               "CREATE TABLE deployment_data (deployment_parameter TEXT NOT NULL, parameter_value TEXT NOT NULL, PRIMARY KEY(deployment_parameter))",
+               "CREATE TABLE deployment (deployment_name TEXT, survey_name TEXT, vessel_name TEXT, camera_name TEXT, survey_description TEXT, deployment_time TEXT, deployment_latitude NUMBER, deployment_longitude NUMBER, max_deployment_depth NUMBER, comments TEXT"]
 
         #  execute the sql statements
         for s in sql:

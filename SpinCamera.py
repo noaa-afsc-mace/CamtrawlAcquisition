@@ -1218,7 +1218,7 @@ class SpinCamera(QtCore.QObject):
 
         The white balancing coefficients can then be written as below:
 
-        a = G / R	b = G / B
+        a = G / R   b = G / B
 
         The coefficients can then be calculated by using the average color channel values.
 
