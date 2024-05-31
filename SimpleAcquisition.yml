@@ -4,6 +4,14 @@
 # SimpleAcquisition_Example.yml.
 #
 
+#  specify metadata elements common to all deployments for a cruise/survey. This information
+#  (and more) is stored in the deployments table in the metadata database.
+metadata:
+    vessel_name:
+    survey_name: Example Survey
+    camera_name: Camtrawl-1
+    survey_description:
+
 application:
 
     output_mode: separate
@@ -48,21 +56,28 @@ sensors:
 
 cameras:
 
+#  Starting with acquisition version 4.3, multiple camera drivers are supported. The default
+#  driver is SpinCamera. If you want to use a different driver, you specify it using the
+#  'driver' keyword. Currently there are two drivers supported:
+#
+#    SpinCamera - Uses the Flir Spinnaker SDK and PySpin Python bindings to control Flir
+#                       machine vision cameras. These must be installed to use this driver.
+#    CV2VideoCapture - Uses the OpenCV VideoCapture class. This is a fairly generic interface
+#                              that supports a wide array of devices thru a crazy number of backends.
+#                              The specific backends available to you depend on how your OpenCV
+#                              was compiled and not all of the configuration options are supported
+#                              by all backend + camera combinations. Also, the valid inputs to
+#                              the supported options will be different for different backend + camera
+#                              combinations.
+#
+#  Since these drivers have different interfaces and offer different levels of control, not
+#  all configuration options are going to be applicable to all camera + driver combinations.
 
+  #  This is an example of using the CV2VideoCapture driver to capture images.
     Webcam_1:
         label: webcam
 
-      #  Starting with acquisition version 4.3, multiple camera drivers are supported. The default
-      #  driver is SpinCamera. If you want to use a different driver, you specify it using the
-      #  'driver' keyword. Currently there are two drivers supported:
-      #
-      #    SpinCamera - Uses the Flir Spinnaker SDK and PySpin Python bindings to control Flir
-      #                       machine vision cameras. These must be installed to use this driver.
-      #   CV2VideoCapture - Uses the OpenCV VideoCapture class. This is a fairly generic interface
-      #                             that supports a wide array of devices. As such, not all
-      #
-      #  Since these drivers have different interfaces and offer different levels of control, not
-      #  all configuration options are going to be applicable to all camera + driver combinations.
+      #  Specify the CV2VideoCapture driver.
         driver:  CV2VideoCapture
 
       #  The CV2VideoCapture driver requries either an index number which defines the camera
@@ -71,9 +86,12 @@ cameras:
 
       #  The effect and range of acceptable values for the camera parameters listed below
       #  will depend on the backend OpenCV is using and your specific camera.
+
+      #  If unspecified, it seems CV2VideoCapture defaults to 640x480. If your device supports
+      #  it, you can specify a different frame size using the cv2_cam_width and cv2_cam_height
+      #  parameters. If these are omitted, you get the 640x480
         cv2_cam_width: 1280
         cv2_cam_height: 720
-
 
       #  gain may or may not be supported depending on the back end the CV2VideoCapture is
       #  using and your specific camera. If your camera doesn't support gain it will be ignored.
@@ -97,8 +115,9 @@ cameras:
         video_preset: x264-fast
 
 
+   # Include a default section for Flir cameras
     default:
-
+      # If you don't specify a driver in a camera section, the SpinCamera interface will be used.
         gain: 25
         exposure_us: 4000
         label: camera
