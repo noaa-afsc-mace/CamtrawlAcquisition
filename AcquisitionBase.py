@@ -1117,8 +1117,8 @@ class AcquisitionBase(QtCore.QObject):
 
             if self.use_db:
                 #  only write an entry in the images table if we have saved a still or
-                #  if we saved a video frame and log_video_frames == True
-                if (image_data['save_still'] or (self.configuration['acquisition']['log_video_frames'] and
+                #  if we saved a video frame and video_log_frames == True
+                if (image_data['save_still'] or (self.configuration['acquisition']['video_log_frames'] and
                         image_data['save_frame'])):
                     self.db.add_image(self.n_images, cam_name, self.trig_time, filename,
                             image_data['exposure'], image_data['gain'], image_data['save_still'],

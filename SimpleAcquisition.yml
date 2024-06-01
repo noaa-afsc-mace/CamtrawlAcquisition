@@ -26,7 +26,7 @@ application:
 
 acquisition:
 
-    trigger_rate: 4
+    trigger_rate: 15
     trigger_limit: -1
 
     video_log_frames: False
@@ -108,7 +108,8 @@ cameras:
 
         save_stills: True
         still_image_extension: .jpg
-        jpeg_quality: 90
+        still_image_divider: 15
+        jpeg_quality: 85
         image_scale: 100
 
         save_video: True
@@ -127,7 +128,8 @@ cameras:
 
         save_stills: True
         still_image_extension: .jpg
-        jpeg_quality: 90
+        still_image_divider: 15
+        jpeg_quality: 85
         image_scale: 100
 
         save_video: False

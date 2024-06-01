@@ -138,6 +138,16 @@ class metadata_db(QtCore.QObject):
 
     def set_metadata_info(self, vessel_name, survey_name, camera_name, description, deployment_time):
 
+
+        if vessel_name is None:
+            vessel_name = ''
+        if survey_name is None:
+            survey_name = ''
+        if camera_name is None:
+            camera_name = ''
+        if description is None:
+            description = ''
+
         time_str = self.datetime_to_db_str(deployment_time)
         sql = ("INSERT INTO deployment (survey_name,vessel_name,camera_name,survey_description,deployment_time) " +
                 "VALUES ('" + survey_name + "','" + vessel_name + "','" + camera_name + "','" +
