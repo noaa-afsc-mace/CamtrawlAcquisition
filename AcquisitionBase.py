@@ -433,9 +433,10 @@ class AcquisitionBase(QtCore.QObject):
         for driver in drivers:
             if driver == 'spincamera':
                 self.logger.info("At least one camera is configured to use the SpinCamera driver." +
-                        "Initializing SpinCamera...")
+                        " Initializing SpinCamera...")
                 try:
-                    #  do our imports - we want to import these globally so we use
+                    #  do our imports - we want to import these globally so we
+                    #  use our import_module function
                     import_module('PySpin')
                     import_module('SpinCamera')
 
@@ -484,9 +485,7 @@ class AcquisitionBase(QtCore.QObject):
                 self.logger.info("At least one camera is configured to use the " +
                         "CV2VideoCapture driver. Importing CV2VideoCapture...")
                 try:
-                    #import CV2VideoCapture
                     import_module('CV2VideoCapture')
-
                 except:
                     #  if we can't import this driver we bail
                     self.logger.critical("Error importing CV2VideoCapture!")
@@ -964,8 +963,13 @@ class AcquisitionBase(QtCore.QObject):
                 self.received[sc.camera_name] = False
 
                 if config['save_stills']:
-                    self.logger.info('    %s: Saving stills as %s  Scale: %i' % (sc.camera_name,
+                    if image_options['file_ext'].lower() in ['.jpeg','.jpg']:
+                        self.logger.info('    %s: Saving stills as %s  Scale: %i  Quality: %i' % (sc.camera_name,
+                            image_options['file_ext'], image_options['scale'],image_options['jpeg_quality']))
+                    else:
+                        self.logger.info('    %s: Saving stills as %s  Scale: %i' % (sc.camera_name,
                             image_options['file_ext'], image_options['scale']))
+
                     if self.use_db:
                         #  update the deployment_data table with the image file type
                         self.db.set_image_extension(image_options['file_ext'])

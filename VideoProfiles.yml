@@ -10,7 +10,6 @@ default:
     crf: 23
     pixel_format: yuv420p
     file_ext:  .mkv
-    tune: zerolatency
     max_frames_per_file: 5000
     ffmpeg_debug_out: False
 
@@ -44,10 +43,9 @@ x265-fast- intraframe:
 x264-fast:
     encoder: libx264
     preset: fast
-    crf: 23
+    crf: 26
     pixel_format: yuv420p
     file_ext:  .mkv
-    tune: zerolatency
     max_frames_per_file: 5000
     ffmpeg_debug_out: False
 
