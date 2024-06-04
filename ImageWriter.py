@@ -32,8 +32,9 @@
 """
 
 import os
-import subprocess as sp
+import datetime
 import shlex
+import subprocess as sp
 import numpy as np
 from PyQt5 import QtCore
 import cv2
@@ -64,7 +65,7 @@ class ImageWriter(QtCore.QObject):
     #  define PyQt Signals
     writeComplete = QtCore.pyqtSignal(str, str)
     writerStopped = QtCore.pyqtSignal(str)
-    writerDebug = QtCore.pyqtSignal(str,str)
+    videoFileClosed = QtCore.pyqtSignal(str,str, int, int, datetime.datetime, datetime.datetime)
     error = QtCore.pyqtSignal(str, str)
 
     def __init__(self, camera_name, parent=None):
@@ -78,6 +79,8 @@ class ImageWriter(QtCore.QObject):
         self.ffmpeg_out = None
         self.filename = ''
         self.save_video = False
+        self.this_video_start_frame = 0
+        self.this_video_start_time = None
         self.video_options = {'encoder':'libx265',
                               'file_ext':'.mp4',
                               'preset':'fast',
@@ -140,7 +143,6 @@ class ImageWriter(QtCore.QObject):
             except Exception as ex:
                 self.error.emit(self.camera_name, 'write_image Error: %s' % ex)
 
-
         #  check if we're writing a video frame
         if self.save_video and image_data['save_frame'] and image_data['ok']:
 
@@ -180,7 +182,7 @@ class ImageWriter(QtCore.QObject):
                     filename = image_data['filename'] + self.video_options['file_ext']
 
                     self.StartRecording(filename, scaled_image.shape[1],
-                            scaled_image.shape[0])
+                            scaled_image.shape[0], image_data['image_number'])
             else:
                 #  we don't have a file open, start a new file
                 if self.video_options['file_ext'][0] != '.':
@@ -188,15 +190,18 @@ class ImageWriter(QtCore.QObject):
                 filename = image_data['filename'] + self.video_options['file_ext']
 
                 self.StartRecording(filename, scaled_image.shape[1],
-                            scaled_image.shape[0])
+                            scaled_image.shape[0], image_data['image_number'])
 
             #  add this frame
             try:
+                # pass the image data to ffmpeg
+                self.ffmpeg_process.stdin.write(scaled_image.tobytes())
+
                 # increase the video frame counter
                 self.frame_number = self.frame_number + 1
 
-                # pass the image data to ffmpeg
-                self.ffmpeg_process.stdin.write(scaled_image.tobytes())
+                # update the video end number
+                self.this_video_end_number = image_data['image_number']
 
                 # emit the write complete signal
                 self.writeComplete.emit(self.camera_name, self.filename)
@@ -206,14 +211,19 @@ class ImageWriter(QtCore.QObject):
                 self.error.emit(self.camera_name, 'write_image Error: %s' % ex)
 
 
-    @QtCore.pyqtSlot(str, int, int)
-    def StartRecording(self, filename, width, height):
+    @QtCore.pyqtSlot(str, int, int, int)
+    def StartRecording(self, filename, width, height, image_number):
+
+        #  Set our start video metadata params
+        self.this_video_start_number = image_number
+        self.this_video_start_time = datetime.datetime.now()
 
         if (self.is_recording):
             #  first close the old file before starting a new one
             self.StopRecording()
 
         try:
+
             #  generate the base ffmpeg command string
             command_string = (f'ffmpeg -y -s {width}x{height} -pixel_format bgr24 ' +
                     f'-f rawvideo -r {self.video_options["framerate"]} -i pipe: -c:v ' +
@@ -229,9 +239,6 @@ class ImageWriter(QtCore.QObject):
 
             #  and end with the output file name
             command_string += "'" + filename + "'"
-
-            #  emit the ffmpeg command string so we can log it
-            self.writerDebug.emit(self.camera_name, 'Encoder started: ' + command_string)
 
             #  parse the command line args and add the
             command_args = shlex.split(command_string)
@@ -260,7 +267,6 @@ class ImageWriter(QtCore.QObject):
                     #  on linux, this seems to work perfectly fine so we'll not change it
                     self.ffmpeg_process = sp.Popen(command_args, stdin=sp.PIPE, stderr=sp.DEVNULL)
 
-
             #  reset the frame counter and set the recording state
             self.frame_number = 0
             self.filename = filename
@@ -269,6 +275,9 @@ class ImageWriter(QtCore.QObject):
         except Exception as ex:
             self.ffmpeg_process = None
             self.is_recording = False
+            self.this_video_filename = ''
+            self.this_video_start_frame = 0
+            self.this_video_start_time = None
             self.error.emit(self.camera_name, 'Start Recording Error: %s' % ex)
 
 
@@ -295,7 +304,13 @@ class ImageWriter(QtCore.QObject):
                     self.ffmpeg_process.terminate()
 
                 if self.ffmpeg_out:
+                    #  close the ffmpeg debug stream if open
                     self.ffmpeg_out.close()
+
+                #  emit the videoFileClosed signal
+                self.videoFileClosed.emit(self.camera_name, self.filename,
+                        self.this_video_start_number, self.this_video_end_number,
+                        self.this_video_start_time, datetime.datetime.now())
 
                 self.ffmpeg_process = None
                 self.ffmpeg_out = None

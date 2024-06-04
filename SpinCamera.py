@@ -91,13 +91,13 @@ class SpinCamera(QtCore.QObject):
     imageData = QtCore.pyqtSignal(str, str, dict)
     saveImage = QtCore.pyqtSignal(str, dict)
     imageSaved = QtCore.pyqtSignal(object, str)
+    videoSaved = QtCore.pyqtSignal(str,str, int, int, datetime.datetime, datetime.datetime)
     error = QtCore.pyqtSignal(str, str)
-    cameraDebug = QtCore.pyqtSignal(str, str)
     acquisitionStarted = QtCore.pyqtSignal(object, str, bool)
     stoppingAcquisition = QtCore.pyqtSignal()
     acquisitionStopped = QtCore.pyqtSignal(object, str, bool)
     triggerReady = QtCore.pyqtSignal(object, int, bool)
-    triggerComplete = QtCore.pyqtSignal(object)
+    triggerComplete = QtCore.pyqtSignal(object, bool)
 
 
     def __init__(self, spin_cam, parent=None):
@@ -330,10 +330,6 @@ class SpinCamera(QtCore.QObject):
         for the individual HDR exposures (and merged
         '''
 
-        self.logger.debug("%s triggered: Image number %d Save image: %s" %
-                (self.camera_name, image_number, save_image))
-
-
         #  don't do anything if we're not acquiring
         if not self.acquiring:
             return
@@ -357,6 +353,11 @@ class SpinCamera(QtCore.QObject):
             if (self.trigger_mode != PySpin.TriggerSource_Software):
                 #  send an exposure of 0 for this camera so it is not triggered
                 self.triggerReady.emit(self, 0, False)
+            else:
+                #  and if we're software triggering, we emit the complete signal
+                #  but unset the trigger argument so acquisition knows the camera
+                #  trigger was skipped.
+                self.triggerComplete.emit(self, False)
             return
 
         #  If specific cameras are specified, check if we're one
@@ -366,6 +367,11 @@ class SpinCamera(QtCore.QObject):
             if (self.trigger_mode != PySpin.TriggerSource_Software):
                 #  send an exposure of 0 for this camera so it is not triggered
                 self.triggerReady.emit(self, 0, False)
+            else:
+                #  and if we're software triggering, we emit the complete signal
+                #  but unset the trigger argument so acquisition knows the camera
+                #  trigger was skipped.
+                self.triggerComplete.emit(self, False)
             return
 
         #  Lastly, check if the save_image or save_video dividers
@@ -432,7 +438,6 @@ class SpinCamera(QtCore.QObject):
 
         else:
             #  single images follow the "standard" camtrawl naming convention
-            self.do_signals.append(emit_signal)
             self.filenames.append(self.save_path + num_str + '_' + time_str +
                     '_' + self.camera_id)
 
@@ -446,6 +451,9 @@ class SpinCamera(QtCore.QObject):
             else:
                 self.save_image.append(False)
 
+
+        self.logger.debug("%s triggered: Image number %d Save image: %s" %
+                (self.camera_name, image_number, save_image))
 
         #  trigger the camera if we're using software triggering
         if (self.trigger_mode == PySpin.TriggerSource_Software):
@@ -681,7 +689,7 @@ class SpinCamera(QtCore.QObject):
 
 
             #  if we're here, we are done with this trigger event
-            self.triggerComplete.emit(self)
+            self.triggerComplete.emit(self, True)
             self.n_triggered = 0
             self.trig_timestamp = None
 
@@ -1040,7 +1048,7 @@ class SpinCamera(QtCore.QObject):
         self.image_writer.writerStopped.connect(self.image_writer_stopped)
         self.image_writer.error.connect(self.image_writer_error)
         self.image_writer.writeComplete.connect(self.image_write_complete)
-        self.image_writer.writerDebug.connect(self.image_writer_debug)
+        self.image_writer.videoFileClosed.connect(self.image_writer_video_closed)
 
         #  these signals handle the cleanup when we're done
         self.image_writer.writerStopped.connect(thread.quit)
@@ -1174,15 +1182,15 @@ class SpinCamera(QtCore.QObject):
         self.error.emit(self.camera_name, error_string)
 
 
-    @QtCore.pyqtSlot(str, str)
-    def image_writer_debug(self, camera_name, debug_string):
+    @QtCore.pyqtSlot(str,str, int, int, datetime.datetime, datetime.datetime)
+    def image_writer_video_closed(self, cam, filename, start_frame, end_frame, start_time, end_time):
         '''
-        The image_writer_debug slot is called when the image_writer emits a
-        debug message. We just pass this along...
+        The image_writer_video_closed slot is called when the image_writer has
+        finished writing a video file.
         '''
 
         #  re-emit as a camera signal
-        self.cameraDebug.emit(self.camera_name, debug_string)
+        self.videoSaved.emit(cam, filename, start_frame, end_frame, start_time, end_time)
 
 
     @QtCore.pyqtSlot(list)

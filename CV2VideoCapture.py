@@ -1,6 +1,13 @@
 
 """
-CV2VideoCapture.py
+CV2VideoCapture.py provides an interface for cameras supported by OpenCV's VideoCapture
+class. VideoCapture is a Swiss Army knife of camera interfaces that supports a wide number
+of backends that support a crazy number of cameras. Exactly what backends are supported
+depends on your specific version of OpenCV. You can use this module's get_camera_backends()
+method to list the supported methods.
+
+
+
 
 Kresimir Williams
 Rick Towler
@@ -9,10 +16,11 @@ NOAA Alaska Fisheries Science Center
 
 """
 
-from PyQt5 import QtCore
 import os
+import logging
 import datetime
 #import subprocess
+from PyQt5 import QtCore
 import ImageWriter
 import numpy as np
 import cv2
@@ -20,21 +28,21 @@ import cv2
 
 class CV2VideoCapture(QtCore.QObject):
 
-
     #  define PyQt Signals
     imageData = QtCore.pyqtSignal(str, str, dict)
     saveImage = QtCore.pyqtSignal(str, dict)
     imageSaved = QtCore.pyqtSignal(object, str)
+    videoSaved = QtCore.pyqtSignal(str, str, int, int, datetime.datetime, datetime.datetime)
     error = QtCore.pyqtSignal(str, str)
-    cameraDebug = QtCore.pyqtSignal(str, str)
     acquisitionStarted = QtCore.pyqtSignal(object, str, bool)
     stoppingAcquisition = QtCore.pyqtSignal()
     acquisitionStopped = QtCore.pyqtSignal(object, str, bool)
     triggerReady = QtCore.pyqtSignal(object, list, bool)
-    triggerComplete = QtCore.pyqtSignal(object)
+    triggerComplete = QtCore.pyqtSignal(object, bool)
 
 
-    def __init__(self, cv_port, camera_name, resolution=(None, None), parent=None):
+    def __init__(self, cv_device_path, camera_name, resolution=(None, None), backend=None,
+            parent=None):
 
         super(CV2VideoCapture, self).__init__(parent)
 
@@ -47,17 +55,23 @@ class CV2VideoCapture(QtCore.QObject):
         self.date_format = "D%Y%m%d-T%H%M%S.%f"
         self.n_triggered = 0
         self.total_triggers = 0
-        self.save_image_divider = 1
+        self.save_stills_divider = 1
+        self.save_stills = True
+        self.save_video = False
+        self.save_video_divider = 1
         self.trigger_divider = 1
         self.label = 'camera'
         self.ND_pixelFormat = None
         self.camera_name = camera_name
-        self.camera_id = str(cv_port)
-
-
+        self.device_path = cv_device_path
+        self.resolution = resolution
+        self.backend = backend
         self.device_info = {}
-        self.device_info['DeviceID'] = 'CV2VideoCapture'
+        self.device_info['DeviceID'] = 'CV2VideoCapture' + '{' + str(self.device_path) + '}'
         self.device_info['DeviceVersion'] = ''
+        self.camera_id = camera_name
+        self.cam = None
+        self.logger = logging.getLogger('Acquisition')
 
         #  get some basic properties
         self.pixelFormat = 0
@@ -70,24 +84,48 @@ class CV2VideoCapture(QtCore.QObject):
         self.sw_trig_timer.timeout.connect(self.software_trigger)
         self.sw_trig_timer.setSingleShot(True)
 
+        #  try to create an instace of OpenCV VideoCapture. This can fail if
+        #  an incorrect camera path and/or backend are provided.
+#        try:
         #  create an instance of OpenCV VideoCapture
-        self.cam = cv2.VideoCapture(cv_port)
+        if self.backend is not None:
+            self.cam = cv2.VideoCapture(self.device_path, self.backend)
+            if not self.cam.isOpened():
+                self.cam = None
+                raise ValueError("Incorrect device path/index or backend specified. Path:" +
+                        str(self.device_path) + " Backend:" + str(self.backend))
+        else:
+            self.cam = cv2.VideoCapture(self.device_path)
+            if not self.cam.isOpened():
+                self.cam = None
+                raise ValueError("Incorrect device path/index specified. Path:" +
+                        str(self.device_path))
 
         #  if a camera resolution was provided set it here. This must be done
         #  before any frames are acquired from the camera
-        if resolution[0]:
-            self.cam.set(cv2.CAP_PROP_FRAME_WIDTH, resolution[0])
-        if resolution[1]:
-            self.cam.set(cv2.CAP_PROP_FRAME_HEIGHT, resolution[1])
+        if self.resolution[0]:
+            self.cam.set(cv2.CAP_PROP_FRAME_WIDTH, self.resolution[0])
+        if self. resolution[1]:
+            self.cam.set(cv2.CAP_PROP_FRAME_HEIGHT, self.resolution[1])
 
-
+        #  These probably wil not work but we try anyways
         self.exposure = self.cam.get(cv2.CAP_PROP_EXPOSURE)
         self.gain = self.cam.get(cv2.CAP_PROP_GAIN)
+
+        self.cv_backend = self.cam.getBackendName()
+
+#        except Exception as e:
+#            self.cam = None
+#            raise e
 
 
     def get_hdr_settings(self):
         '''
-        get_hdr_settings queries the camera and returns the camera's HDR settings in a dict
+        get_hdr_settings queries the camera and returns the camera's HDR
+        settings in a dict
+
+        HDR mode is not supported by VideoCapture but this is here in case
+        someone wants to implement a pure software implementation.
         '''
 
         hdr_parameters = {}
@@ -96,44 +134,74 @@ class CV2VideoCapture(QtCore.QObject):
         hdr_parameters["Image3"] = {'exposure':0, 'gain':0, 'emit_signal':True, 'save_image':True}
         hdr_parameters["Image4"] = {'exposure':0, 'gain':0, 'emit_signal':True, 'save_image':True}
 
-
         return hdr_parameters
 
+
     def get_gain(self):
-        return self.cam.get(cv2.CAP_PROP_GAIN)
+        '''
+        get_gain returns the camera gain. This method may or may not return valid
+        information depending on the backend VideoCapture is using. Most likely it
+        will not return anything useful. this method is requried to ensure API
+        compatibility.
+        '''
+        if self.cam:
+            val = self.cam.get(cv2.CAP_PROP_GAIN)
+        else:
+            val = 0
+
+        return val
+
 
     def get_exposure(self):
-        return self.cam.get(cv2.CAP_PROP_EXPOSURE)
+        '''
+        get_exposure returns the camera exposure. This method may or may not return
+        valid information depending on the backend VideoCapture is using. Most likely it
+        will not return anything useful.
+        '''
+        if self.cam:
+            val = self.cam.get(cv2.CAP_PROP_EXPOSURE)
+        else:
+            val = 0
+
+        return val
+
 
     def get_binning(self):
+        '''
+        Binning is not supported by VideoCapture
+        '''
         return 1
 
+
     def set_binning(self, crap):
+        '''
+        Binning is not supported by VideoCapture
+        '''
         return True
 
+
     def enable_HDR_mode(self):
-        '''enable_HDR_mode enables the HDR sequencer in the camera and results in
-        collecting 4 images per "trigger" where each image has a unique exposure
-        and gain value. This can be used to generate images with much higher dynamic
-        ranges for scenes that are relatively static.
+        '''
+        HDR mode is not supported by VideoCapture
         '''
 
         return False
 
 
     def disable_hdr_mode(self):
-        '''disable_HDR_mode disables HDR acquisition.
+        '''
+        HDR mode is not supported by VideoCapture
         '''
 
         return False
 
 
-
-
-
     def set_hdr_settings(self, hdr_parameters):
         '''
         set_hdr_settings sets the camera's HDR settings
+
+        HDR mode is not supported by VideoCapture but this is here in case
+        someone wants to implement a pure software implementation.
         '''
 
         #  update the internal HDR parameteres dict
@@ -164,8 +232,6 @@ class CV2VideoCapture(QtCore.QObject):
         for the individual HDR exposures (and merged
         '''
 
-
-
         #  don't do anything if we're not acquiring
         if not self.acquiring:
             return
@@ -181,6 +247,22 @@ class CV2VideoCapture(QtCore.QObject):
         #  number of triggers in this collection event. This will always be
         #  1 for standard acquisition and 4 for HDR acquisition.
         self.n_triggered = 1
+
+        #  check if we should trigger because of the divider
+        if (self.total_triggers % self.trigger_divider) != 0:
+            #  nope, don't trigger. We emit the complete signal but unset
+            #  the trigger argument so acquisition knows the camera trigger
+            #  was skipped.
+            self.triggerComplete.emit(self, False)
+            return
+
+        #  If specific cameras are specified, check if we're one
+        if (len(cam_list) > 0 and self not in cam_list):
+            #  nope, don't trigger. We emit the complete signal but unset
+            #  the trigger argument so acquisition knows the camera trigger
+            #  was skipped.
+            self.triggerComplete.emit(self, False)
+            return
 
         #  Lastly, check if the save_image or save_video dividers
         #  will override the save_image value passed into this method.
@@ -212,11 +294,9 @@ class CV2VideoCapture(QtCore.QObject):
         #  generate the time string
         time_str = timestamp.strftime(self.date_format)[:-3]
 
-
         #  single images follow the "standard" camtrawl naming convention
-        self.do_signals.append(emit_signal)
         self.filenames.append(self.save_path + num_str + '_' + time_str +
-                '_' + self.camera_id)
+                '_' + self.camera_name)
 
         self.exposures.append(self.exposure)
         if emit_signal:
@@ -233,9 +313,11 @@ class CV2VideoCapture(QtCore.QObject):
         #  1 for standard acquisition and 4 for HDR acquisition.
         self.n_triggered = 1
 
+        self.logger.debug("%s triggered: Image number %d Save image: %s" %
+                (self.camera_name, image_number, save_image))
+
         #  Software trigger the camera
         self.sw_trig_timer.start(0)
-
 
 
     @QtCore.pyqtSlot()
@@ -316,13 +398,10 @@ class CV2VideoCapture(QtCore.QObject):
 
         else:
             #  there was a problem receiving image
-
             pass
 
-
-
         #  we are done with this trigger event
-        self.triggerComplete.emit(self)
+        self.triggerComplete.emit(self, True)
         self.n_triggered = 0
 
 
@@ -336,21 +415,25 @@ class CV2VideoCapture(QtCore.QObject):
 
     def set_camera_trigger(self, mode):
         '''
-            modes: 'Software' - camera is configured to software triggered when trigger method is called
-                   'Hardware' - camera is configured to be hardware triggered
-                   'None' - triggers are disabled
-            source:int value specifying the trigger source for hardware triggering. Default PySpin.TriggerSource_Line0
-            edge:  'rising' - trigger on the leading edge of the signal (default)
-                   'falling - trigger on the falling edge of the signal
+        The VideoCapture backend doesn't really support hardware triggers so this
+        method does nothing but is requried to ensure API compatibility.
         '''
+
         return True
 
 
     def set_exposure(self, exposure):
+        '''
+        set_exposure sets the camera exposure. This method may or may not work
+        depending on the backend VideoCapture is using and your specific camera.
+        This method is requried to ensure API compatibility.
+        '''
 
         try:
             self.cam.set(cv2.CAP_PROP_EXPOSURE, exposure)
-            self.exposure = self.cam.get(cv2.CAP_PROP_EXPOSURE)
+            #  set the value based on what was passed in, not from querying VideoCapture
+            #  since that doesn't usually return valid data.
+            self.exposure = exposure
         except:
             return False
 
@@ -358,10 +441,16 @@ class CV2VideoCapture(QtCore.QObject):
 
 
     def set_gain(self, gain):
-
+        '''
+        set_gain sets the camera gain. This method may or may not work
+        depending on the backend VideoCapture is using and your specific camera.
+        This method is requried to ensure API compatibility.
+        '''
         try:
             self.cam.set(cv2.CAP_PROP_GAIN, gain)
-            self.gain = self.cam.get(cv2.CAP_PROP_GAIN)
+            #  set the value based on what was passed in, not from querying VideoCapture
+            #  since that doesn't usually return valid data.
+            self.gain = gain
         except:
             return False
 
@@ -376,7 +465,6 @@ class CV2VideoCapture(QtCore.QObject):
         image_data = {'data':None, 'ok':False, 'exposure':-1, 'gain':-1, 'is_hdr':False}
 
         #  get the image
-
         state, raw_image =  self.cam.read()
         if not state:
             #  timed out waiting for image
@@ -395,6 +483,10 @@ class CV2VideoCapture(QtCore.QObject):
 
 
     def set_pixel_format(self, format):
+        '''
+        set_pixel_format is not supported by VideoCapture but is required
+        for API compatibility.
+        '''
 
         return True
 
@@ -404,8 +496,9 @@ class CV2VideoCapture(QtCore.QObject):
             save_video, video_options):
 
 
-        if self.acquiring:
-           return
+        #  just return if we're already acquiring or if we failed to init the camera
+        if self.acquiring or self.cam is None:
+            return
 
         #  Reset n_triggered
         self.n_triggered = 0
@@ -442,6 +535,7 @@ class CV2VideoCapture(QtCore.QObject):
         self.image_writer.writerStopped.connect(self.image_writer_stopped)
         self.image_writer.error.connect(self.image_writer_error)
         self.image_writer.writeComplete.connect(self.image_write_complete)
+        self.image_writer.videoFileClosed.connect(self.image_writer_video_closed)
 
         #  these signals handle the cleanup when we're done
         self.image_writer.writerStopped.connect(thread.quit)
@@ -453,12 +547,12 @@ class CV2VideoCapture(QtCore.QObject):
 
         try:
 
-            #  Begin acquiring images
-            self.acquiring = True
-
             #  read a few frames to get things rolling
             for i in range(5):
-                state, raw_image =  self.cam.read()
+                state, raw_image = self.cam.read()
+
+            #  Begin acquiring images
+            self.acquiring = True
 
             #  and emit the acquisitionStarted signal
             self.acquisitionStarted.emit(self, self.camera_name, True)
@@ -502,6 +596,17 @@ class CV2VideoCapture(QtCore.QObject):
         self.error.emit(self.camera_name, error_string)
 
 
+    @QtCore.pyqtSlot(str, str, int, int, datetime.datetime, datetime.datetime)
+    def image_writer_video_closed(self, cam, filename, start_frame, end_frame, start_time, end_time):
+        '''
+        The image_writer_video_closed slot is called when the image_writer has
+        finished writing a video file.
+        '''
+
+        #  re-emit as a camera signal
+        self.videoSaved.emit(cam, filename, start_frame, end_frame, start_time, end_time)
+
+
     @QtCore.pyqtSlot(list)
     def stop_acquisition(self, cam_list):
 
@@ -530,6 +635,7 @@ class CV2VideoCapture(QtCore.QObject):
     def set_white_balance(self):
         pass
 
+
     def __sync_settings(self, nodemap=None):
         '''__sync_settings will trigger the camera a few times to push settings into the
         CMOS ASIC so the next trigger executed will return images with the specified
@@ -548,42 +654,45 @@ class CV2VideoCapture(QtCore.QObject):
         '''__sync_HDR will trigger the camera (discarding any imaged) until the
         HDR sequence counter is pointing at the start of the sequence.
 
-        Flir cameras seem to start at a random point in the HDR sequence and there
-        isn't an obvious way of resetting it. We need to know where the camera is
-        in the sequence in order to save the images with the correct exposure and
-        gain data. This method will trigger the camera, advancing the camera
-        through the sequence, until it pointed back at "Image1".
-
-        This method will do this using software triggering. It will store the
-        current trigger source and state, switch to software, and trigger. After
-        the sync is complete the trigger settings are returned to their original
-        state.
+        Currently HDR acquisition is not supported with this driver. This method
+        is included for API compatibility.
         '''
 
         pass
 
 
-    def get_device_info(self, nodemap, node='DeviceInformation'):
-        """
-        This function returns a dict that contains device information
-        """
-
-        dev_info = {}
-
-        return dev_info
 
 
-    def check_node_accessibility(self, node, is_readable=True):
-        """
-        Helper for checking GenICam node accessibility
+def get_camera_backends():
+    '''
+    get_camera_backends returns a dict, keyed by backend name containing
+    the camera backends that the platform's OpenCV supports.
+    '''
+    cam_backends = cv2.videoio_registry.getCameraBackends()
+    backend_names = {}
 
-        :param node: GenICam node being checked
-        :type node: CNodePtr
-        :return: True if accessible, False otherwise
-        :rtype: bool
-        """
+    for backend in cam_backends:
+        name = cv2.videoio_registry.getBackendName(backend)
+        backend_names[name] = backend
 
-        return False
+    return backend_names
+
+
+def get_stream_backends():
+    '''
+    get_stream_backends returns a dict, keyed by backend name containing
+    the stream backends that the platform's OpenCV supports.
+    '''
+
+    cam_backends = cv2.videoio_registry.getStreamBackends()
+    backend_names = {}
+
+    for backend in cam_backends:
+        name = cv2.videoio_registry.getBackendName(backend)
+        backend_names[name] = backend
+
+    return backend_names
+
 
 
 '''

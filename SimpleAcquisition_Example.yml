@@ -1,13 +1,17 @@
 # SimpleAcquisition_Example.yml
 #
-# This file provides configuration parameters for SimpleAcquisition.py
+# This file documents all of the configuration parameters for SimpleAcquisition.py
+# and is intended to be used for reference only.
 #
 # If a configuration parameter defined below is commented or missing, the default value
-# will be used. Defaults are defined at the top of SimpleAcquisition.py
+# will be used. Defaults are defined at the top of SimpleAcquisition.py. Typically
 #
 
+
+
 #  specify metadata elements common to all deployments for a cruise/survey. This information
-#  (and more) is stored in the deployments table in the metadata database.
+#  (and more) is stored in the deployments table in the metadata database and can be used
+#  to identify datasets collected on a specific survey or by a specific instrument.
 metadata:
     vessel_name:
     survey_name: Example Survey
@@ -84,7 +88,7 @@ application:
     #  CamtrawlAcquisition directory:
     ffmpeg_path: ./ffmpeg/bin
 
-    #  Linux users will most likely want to leave this empty.
+    #  Linux users will most likely want to leave this empty to use the system's ffmpeg
     #ffmpeg_path:
 
     #  Set disk_free_monitor to True to have the acquisition application periodically check
@@ -326,7 +330,7 @@ cameras:
         # Specify the format the images are saved in. The supported formats will be those
         # supported by OpenCV on your platform. For Windows JPEG (.jpeg, .jpg, .jpe),
         # PNG (.png) and TIFF (.tiff, .tif) formats are always supported. It is possible
-        # that PEG 2000 (.jp2) is supported but this is untested. On Linux, OpenCV uses
+        # that JPEG 2000 (.jp2) is supported but this is untested. On Linux, OpenCV uses
         # the OS's image IO libraries so you may need to install them to get support for
         # a specific format.
         still_image_extension: .jpg
@@ -345,10 +349,10 @@ cameras:
         # a percent of the original size and the default value is 100 (unscaled).
         image_scale: 100
 
-        # (experimental) Specify if this camera should save video files.
+        # Specify if this camera should save video files.
         save_video: False
 
-        # (experimental) Specify the video "preset" defined in the VideoProfiles.yml that
+        # Specify the video "preset" defined in the VideoProfiles.yml that
         # will be used to set up the video encoder. Tuning parameters for various encoders
         # can be tricky, the idea is to define some known good configurations that can be
         # easily copied and further tuned for specific applications. See VideoProfiles.yml
@@ -364,7 +368,7 @@ cameras:
         # the video frame to disk.
         video_frame_divider: 1
 
-        # (experimental) Set video_force_framerate to override the framerate value passed to
+        # Set video_force_framerate to override the framerate value passed to
         # the video encoder. By default, the system acquisition rate is used but not all encoders
         # are happy with typical camera system acquisition rates so it can be changed here.
         # If this parameter is set to -1 or omitted, the system framerate will be used.
@@ -381,7 +385,7 @@ cameras:
         # save the data. Your camera must support HDR capture for this to work.
 
         # Set hdr_enabled to True to utilize the camera's HDR sequencer to acquire 4 images
-        # sequentially for each "trigger". You camera must support HDR sequencing.
+        # sequentially for each "trigger". Your camera must support HDR sequencing.
         hdr_enabled: False
 
         # (Experimental) Set hdr_save_merged to True to save the merged HDR image to disk. There is

@@ -136,8 +136,28 @@ class metadata_db(QtCore.QObject):
         query.exec_()
 
 
-    def set_metadata_info(self, vessel_name, survey_name, camera_name, description, deployment_time):
+    def add_video(self, cam_name, file_name, start_frame, end_frame, start_time, end_time):
+        '''
+        add_video inserts an entry in the videos table, The videos table contains the camera name,
+        video file name, and start/end frame number and start/end time. This allows one to quickly
+        find a video file that conatins specific frames/times and/or associate sensor data with
+        video frames.
+        '''
 
+        start_time = self.datetime_to_db_str(start_time)
+        end_time = self.datetime_to_db_str(end_time)
+        sql = ("INSERT INTO videos VALUES('" + cam_name + "','" + file_name + "'," + str(start_frame) +
+                "," + str(end_frame) + ",'" + start_time + "','" + end_time + "')")
+        query = QtSql.QSqlQuery(sql, self.db)
+        query.exec_()
+
+
+    def set_metadata_info(self, vessel_name, survey_name, camera_name, description, deployment_time):
+        '''
+        set_metadata_info inserts the "general" deployment metadata (stuff that is known when the
+        app starts.) Additional data such as deployment lat/lon or max depth are not set and if
+        populated, would be set post recovery.
+        '''
 
         if vessel_name is None:
             vessel_name = ''
@@ -191,6 +211,7 @@ class metadata_db(QtCore.QObject):
         # list of SQL statements that define the base camtrawlMetadata database schema
         sql = ["CREATE TABLE cameras (camera TEXT NOT NULL, device_id TEXT, serial_number TEXT, label TEXT, rotation TEXT, device_version TEXT, device_speed TEXT, PRIMARY KEY(camera))",
                "CREATE TABLE images (number INTEGER NOT NULL, camera TEXT NOT NULL, time TEXT, name TEXT, exposure_us INTEGER, gain FLOAT, still_image INTEGER, video_frame INTEGER, discarded INTEGER, md5_checksum TEXT, PRIMARY KEY(number,camera))",
+               "CREATE TABLE videos (camera TEXT NOT NULL, filename TEXT NOT NULL, start_frame INTEGER NOT NULL, end_frame INTEGER NOT NULL, start_time TEXT NOT NULL, end_time TEXT NOT NULL, PRIMARY KEY(camera, filename))",
                "CREATE TABLE dropped (number INTEGER NOT NULL, camera TEXT NOT_NULL, time TEXT, PRIMARY KEY(number,camera))",
                "CREATE TABLE sensor_data (number INTEGER NOT NULL, time TEXT NOT NULL, sensor_id TEXT NOT NULL, header TEXT NOT NULL, data TEXT, PRIMARY KEY(number,time,sensor_id,header))",
                "CREATE TABLE async_data (time TEXT NOT NULL, sensor_id TEXT NOT NULL, header TEXT NOT NULL, data TEXT, PRIMARY KEY(time,sensor_id,header))",

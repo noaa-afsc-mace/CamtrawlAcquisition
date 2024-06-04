@@ -449,7 +449,7 @@ class AcquisitionBase(QtCore.QObject):
                     for camera in spin_cameras:
 
                         #  extract the camera name from the Spin camera pointer - 'tis a
-                        #  bit complicated....
+                        #  bit involved....
                         device_info = {}
                         nodemap_tldevice = camera.GetTLDeviceNodeMap()
                         node_device_information = PySpin.CCategoryPtr(nodemap_tldevice.GetNode('DeviceInformation'))
@@ -654,8 +654,8 @@ class AcquisitionBase(QtCore.QObject):
     def AcquisitionSetup2(self):
         '''
         AcquisitionSetup2 completes setup by configuring the cameras and
-        starting acquisition. The application will exit here if there are
-        any issues encountered during setup.
+        starting acquisition. Subclasses can override this method to perform
+        any additional setup steps prior to calling the parent method.
         '''
 
         #  if the free space is ok, configure the cameras
@@ -663,7 +663,7 @@ class AcquisitionBase(QtCore.QObject):
             self.cam_ok = self.ConfigureCameras()
             if not self.cam_ok:
                 #  we were unable to find any cameras
-                self.logger.critical("CRITICAL ERROR: Unable to find any cameras. " +
+                self.logger.critical("Error configuring cameras. " +
                         "The application will exit.")
         else:
             self.cam_ok = False
@@ -791,9 +791,15 @@ class AcquisitionBase(QtCore.QObject):
 
                     try:
                         sc = CV2VideoCapture.CV2VideoCapture(cam_path, cam, resolution=resolution)
+
+                        self.logger.info(('    %s: OpenCV VideoCapture initialized. Using %s backend') %
+                                (sc.camera_name, sc.cv_backend))
+
                     except Exception as e:
-                        self.logger.warning("Unable to instantiate driver for camera '" + cam + "'")
+                        self.logger.warning("    Unable to instantiate driver for camera '" + cam + "'")
                         self.logger.warning("    Error: " + str(e))
+                        self.logger.warning("    This camera will be ignored.")
+                        continue
 
                 #  set up the options for saving image data
                 image_options = {'file_ext':config['still_image_extension'],
@@ -942,9 +948,9 @@ class AcquisitionBase(QtCore.QObject):
                 sc.imageData.connect(self.CamImageAcquired)
                 sc.triggerComplete.connect(self.CamTriggerComplete)
                 sc.error.connect(self.LogCamError)
-                sc.cameraDebug.connect(self.LogCamDebug)
                 sc.acquisitionStarted.connect(self.AcquisitionStarted)
                 sc.acquisitionStopped.connect(self.AcquisitionStopped)
+                sc.videoSaved.connect(self.LogVideoMetadata)
                 self.trigger.connect(sc.trigger)
                 self.stopAcquiring.connect(sc.stop_acquisition)
                 self.startAcquiring.connect(sc.start_acquisition)
@@ -1134,8 +1140,8 @@ class AcquisitionBase(QtCore.QObject):
         self.logger.debug(log_str)
 
 
-    @QtCore.pyqtSlot(object)
-    def CamTriggerComplete(self, cam_obj):
+    @QtCore.pyqtSlot(object, bool)
+    def CamTriggerComplete(self, cam_obj, triggered):
         '''CamTriggerComplete is called when a camera has completed a trigger event.
         This is called regardless of whether an image was received and/or the camera
         is configured to emit a signal when it does acquire an image.
@@ -1145,7 +1151,8 @@ class AcquisitionBase(QtCore.QObject):
         self.received[cam_obj.camera_name] = True
 
         #  emit some debugging info
-        self.logger.debug(cam_obj.camera_name + ': Trigger Complete.')
+        if triggered:
+            self.logger.debug(cam_obj.camera_name + ': Trigger Complete.')
 
         #  check if all triggered cameras have completed the trigger sequence
         if (all(self.received.values())):
@@ -1215,14 +1222,17 @@ class AcquisitionBase(QtCore.QObject):
         self.logger.error(cam_name + ':ERROR:' + error_str)
 
 
-    @QtCore.pyqtSlot(str, str)
-    def LogCamDebug(self, cam_name, debug_str):
+    @QtCore.pyqtSlot(str, str, int, int, datetime.datetime, datetime.datetime)
+    def LogVideoMetadata(self, cam_name, filename, start_frame, end_frame, start_time, end_time):
         '''
-        The LogCamDebug slot is called when a camera emits some debug info. For now
-        we just log the error and move on.
+        The LogVideoMetadata slot is called when a camera closes a video file. The video's
+        file name, start/end frame number, and start/end time are written in the db
+        for each video file.
         '''
-        #  log it.
-        self.logger.debug(cam_name + ':DEBUG:' + debug_str)
+
+        self.logger.debug(cam_name + ':ImageWriter:' + filename + ' start frame:' +
+                str(start_frame) + ' end frame:' + str(end_frame))
+        self.db.add_video(cam_name, filename, start_frame, end_frame, start_time, end_time)
 
 
     @QtCore.pyqtSlot(str)
