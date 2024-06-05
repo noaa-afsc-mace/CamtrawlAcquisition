@@ -77,19 +77,9 @@ cameras:
     Webcam_1:
         label: webcam
         trigger_divider: 1
-      #  Specify the CV2VideoCapture driver.
         driver:  CV2VideoCapture
-
-      #  The CV2VideoCapture driver requries either an index number which defines the camera
-      #  to use. It may also accept a path in Linux (/dev/video0) but this is untested.
+        cv2_cam_backend: DSHOW
         cv2_cam_path: 1
-
-      #  The effect and range of acceptable values for the camera parameters listed below
-      #  will depend on the backend OpenCV is using and your specific camera.
-
-      #  If unspecified, it seems CV2VideoCapture defaults to 640x480. If your device supports
-      #  it, you can specify a different frame size using the cv2_cam_width and cv2_cam_height
-      #  parameters. If these are omitted, you get the 640x480
         cv2_cam_width: 1280
         cv2_cam_height: 720
 

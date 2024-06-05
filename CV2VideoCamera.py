@@ -1,12 +1,19 @@
 
 """
-CV2VideoCapture.py provides an interface for cameras supported by OpenCV's VideoCapture
+CV2VideoCamera.py provides an interface for cameras supported by OpenCV's VideoCapture
 class. VideoCapture is a Swiss Army knife of camera interfaces that supports a wide number
 of backends that support a crazy number of cameras. Exactly what backends are supported
-depends on your specific version of OpenCV. You can use this module's get_camera_backends()
-method to list the supported methods.
+depends on your specific version of OpenCV and your OS. You can use this module's
+get_camera_backends() method to list the supported backends.
 
-
+VideoCapture brings wide, but fairly shallow support for cameras. Not all methods for
+camera control are supported by all cameras and most cameras have fairly limited
+support for basic tasks such as setting resolution, exposure, white balance, and gain.
+To further complicate things, the level of control depends on your OS and backend
+and a camera can be supported by multiple backends. If you do not specify a backend,
+OpenCV will use the first compatible backend it finds which may not be the optimal
+backend for your camera. For best results, you are going to have to work at determining
+the best backend to use for your camera, OpenCV version, and OS.
 
 
 Kresimir Williams
@@ -26,7 +33,7 @@ import numpy as np
 import cv2
 
 
-class CV2VideoCapture(QtCore.QObject):
+class CV2VideoCamera(QtCore.QObject):
 
     #  define PyQt Signals
     imageData = QtCore.pyqtSignal(str, str, dict)
@@ -44,8 +51,7 @@ class CV2VideoCapture(QtCore.QObject):
     def __init__(self, cv_device_path, camera_name, resolution=(None, None), backend=None,
             parent=None):
 
-        super(CV2VideoCapture, self).__init__(parent)
-
+        super(CV2VideoCamera, self).__init__(parent)
 
         self.rotation = 'none'
         self.timeout = 2000
@@ -64,10 +70,8 @@ class CV2VideoCapture(QtCore.QObject):
         self.ND_pixelFormat = None
         self.camera_name = camera_name
         self.device_path = cv_device_path
-        self.resolution = resolution
-        self.backend = backend
         self.device_info = {}
-        self.device_info['DeviceID'] = 'CV2VideoCapture' + '{' + str(self.device_path) + '}'
+        self.device_info['DeviceID'] = 'CV2VideoCamera' + '{' + str(self.device_path) + '}'
         self.device_info['DeviceVersion'] = ''
         self.camera_id = camera_name
         self.cam = None
@@ -84,39 +88,60 @@ class CV2VideoCapture(QtCore.QObject):
         self.sw_trig_timer.timeout.connect(self.software_trigger)
         self.sw_trig_timer.setSingleShot(True)
 
-        #  try to create an instace of OpenCV VideoCapture. This can fail if
+        #  if a backend is provided, check that it is available
+        has_backend= False
+        if backend is not None:
+            #  get a dict of supported backends
+            backends = get_camera_backends()
+            #  now iterate thru the supported backends to see if the provided backend macthes
+            for this_backend in backends:
+                #  check if the specified backend matches by name
+                if backend in this_backend:
+                    backend = backends[this_backend]
+                    has_backend= True
+                    break
+                #  check if the specified backend matches by number
+                if backend == backends[this_backend]:
+                    has_backend= True
+                    break
+
+        #  now try to create an instace of OpenCV VideoCapture. This can fail if
         #  an incorrect camera path and/or backend are provided.
-#        try:
-        #  create an instance of OpenCV VideoCapture
-        if self.backend is not None:
-            self.cam = cv2.VideoCapture(self.device_path, self.backend)
+        if has_backend:
+            #  backend is provided and seems available
+            self.cam = cv2.VideoCapture(self.device_path, backend)
             if not self.cam.isOpened():
                 self.cam = None
                 raise ValueError("Incorrect device path/index or backend specified. Path:" +
-                        str(self.device_path) + " Backend:" + str(self.backend))
+                        str(self.device_path) + " Backend:" + str(backend))
         else:
+            #  no backend provided, let OpenCV try to figure it out
             self.cam = cv2.VideoCapture(self.device_path)
             if not self.cam.isOpened():
                 self.cam = None
                 raise ValueError("Incorrect device path/index specified. Path:" +
                         str(self.device_path))
 
+        #  note the backend that we ultimately ended up with
+        self.cv_backend = self.cam.getBackendName()
+
         #  if a camera resolution was provided set it here. This must be done
         #  before any frames are acquired from the camera
-        if self.resolution[0]:
-            self.cam.set(cv2.CAP_PROP_FRAME_WIDTH, self.resolution[0])
-        if self. resolution[1]:
-            self.cam.set(cv2.CAP_PROP_FRAME_HEIGHT, self.resolution[1])
+        if resolution[0]:
+            self.cam.set(cv2.CAP_PROP_FRAME_WIDTH, resolution[0])
+        if resolution[1]:
+            self.cam.set(cv2.CAP_PROP_FRAME_HEIGHT, resolution[1])
+
+        #  now query VideoCapture for the resolution - Setting resolution is not
+        #  always reliable. Some backend and camera combinations work, some don't.
+        #  Some only work at certain resolutions.
+        self.resolution = []
+        self.resolution.append(self.cam.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.resolution.append(self.cam.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
         #  These probably wil not work but we try anyways
         self.exposure = self.cam.get(cv2.CAP_PROP_EXPOSURE)
         self.gain = self.cam.get(cv2.CAP_PROP_GAIN)
-
-        self.cv_backend = self.cam.getBackendName()
-
-#        except Exception as e:
-#            self.cam = None
-#            raise e
 
 
     def get_hdr_settings(self):
@@ -145,7 +170,8 @@ class CV2VideoCapture(QtCore.QObject):
         compatibility.
         '''
         if self.cam:
-            val = self.cam.get(cv2.CAP_PROP_GAIN)
+            if self.cv_backend in ['MSMF','DSHOW']:
+                val = self.cam.get(cv2.CAP_PROP_GAIN)
         else:
             val = 0
 

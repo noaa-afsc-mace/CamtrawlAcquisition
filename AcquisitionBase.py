@@ -106,7 +106,7 @@ class AcquisitionBase(QtCore.QObject):
     #  VALID_DRIVERS contains the names of camera drivers available to the system.
     #  If a camera specifies a different driver than one listed here, it will be
     #  ignored. Driver names should be entered in lower case.
-    VALID_DRIVERS = ['spincamera', 'cv2videocapture']
+    VALID_DRIVERS = ['spincamera', 'cv2videocamera']
 
     #  specify the maximum number of times the application will attempt to open a
     #  metadata db file when running in combined mode and the original db file
@@ -481,14 +481,14 @@ class AcquisitionBase(QtCore.QObject):
                 self.logger.info('Spinnaker/PySpin library version: %d.%d.%d.%d' % (version.major,
                         version.minor, version.type, version.build))
 
-            elif driver == 'cv2videocapture':
+            elif driver == 'cv2videocamera':
                 self.logger.info("At least one camera is configured to use the " +
-                        "CV2VideoCapture driver. Importing CV2VideoCapture...")
+                        "CV2VideoCamera driver. Importing CV2VideoCamera...")
                 try:
-                    import_module('CV2VideoCapture')
+                    import_module('CV2VideoCamera')
                 except:
                     #  if we can't import this driver we bail
-                    self.logger.critical("Error importing CV2VideoCapture!")
+                    self.logger.critical("Error importing CV2VideoCamera!")
                     self.logger.critical("Application exiting...")
                     QtCore.QCoreApplication.instance().quit()
                     return
@@ -771,7 +771,7 @@ class AcquisitionBase(QtCore.QObject):
                     #  get the exposure config value for this driver
                     this_exposure = config['exposure_us']
 
-                elif config['driver'].lower() == 'cv2videocapture':
+                elif config['driver'].lower() == 'cv2videocamera':
                     #  create a camera object that uses CV2.VideoCapture as the
                     #  interface to the camera.
 
@@ -785,15 +785,29 @@ class AcquisitionBase(QtCore.QObject):
                         cam_path = 0
                     else:
                         cam_path = config['cv2_cam_path']
+                    if 'cv2_cam_backend' in config:
+                        backend = config['cv2_cam_backend'].strip()
+                    else:
+                        backend = None
 
                     #  get the exposure config value for this driver
                     this_exposure = config['exposure']
 
                     try:
-                        sc = CV2VideoCapture.CV2VideoCapture(cam_path, cam, resolution=resolution)
+                        #  create an instance of CV2VideoCamera
+                        sc = CV2VideoCamera.CV2VideoCamera(cam_path, cam, resolution=resolution,
+                                backend=backend)
 
+                        #  report some driver specific details
                         self.logger.info(('    %s: OpenCV VideoCapture initialized. Using %s backend') %
                                 (sc.camera_name, sc.cv_backend))
+                        if resolution[0] and resolution[1]:
+                            self.logger.info(('    %s: Configured Resolution %ix%i  Actual Resolution %ix%i') %
+                                    (sc.camera_name, resolution[0], resolution[1],
+                                    sc.resolution[0], sc.resolution[1]))
+                        else:
+                            self.logger.info(('    %s: Configured Resolution <not specified> Actual Resolution %ix%i') %
+                                    (sc.camera_name, sc.resolution[0], sc.resolution[1]))
 
                     except Exception as e:
                         self.logger.warning("    Unable to instantiate driver for camera '" + cam + "'")
@@ -1162,18 +1176,17 @@ class AcquisitionBase(QtCore.QObject):
                 write_sync = False
                 #  check if we saved this still and the total number of saved stills is evenly
                 #  divisible by the still_sync_data_divider
-                if ((self.n_saved_stills % self.configuration['acquisition']['still_sync_data_divider']) != 0 and
+                if ((self.n_saved_stills % self.configuration['acquisition']['still_sync_data_divider']) == 0 and
                         self.saved_last_still):
                     #  it is, so we'll write the data
                     write_sync = True
                 #  if not, then we check for the same thing with the video frames
-                elif ((self.n_saved_frames % self.configuration['acquisition']['video_sync_data_divider']) != 0 and
+                elif ((self.n_saved_frames % self.configuration['acquisition']['video_sync_data_divider']) == 0 and
                         self.saved_last_frame):
                     write_sync = True
                 if write_sync:
                     #  write all of the sync messages we cached when the cameras were triggered.
-                    for sync_message in self.sync_trigger_messages:
-                            message_data = self.sync_trigger_messages[sync_message]
+                    for message_data in self.sync_trigger_messages:
                             self.db.insert_sync_data(message_data[0],message_data[1],message_data[2],
                                     message_data[3],message_data[4])
 

@@ -111,7 +111,7 @@ class CamtrawlAcquisition(AcquisitionBase):
                 #  ensures that the controller is ignored when general sensors are configured
                 #  in AcquisitionBase.AcquisitionSetup.
                 self.configuration['sensors']['synchronous'].extend(['$OHPR'])
-                self.configuration['sensors']['asynchronous'].extend(['$CTCS', '$SBCS', '$IMUC', '$CTSV'])
+                self.configuration['sensors']['asynchronous'].extend(['$CTCS', '$SBCS', '$IMUC', '$CTSV', 'setPCState'])
                 self.configuration['sensors']['installed_sensors']['CTControl'] = {}
                 self.configuration['sensors']['installed_sensors']['CTControl']['logging_interval_ms'] = None
 

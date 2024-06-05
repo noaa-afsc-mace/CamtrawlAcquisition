@@ -216,7 +216,7 @@ class metadata_db(QtCore.QObject):
                "CREATE TABLE sensor_data (number INTEGER NOT NULL, time TEXT NOT NULL, sensor_id TEXT NOT NULL, header TEXT NOT NULL, data TEXT, PRIMARY KEY(number,time,sensor_id,header))",
                "CREATE TABLE async_data (time TEXT NOT NULL, sensor_id TEXT NOT NULL, header TEXT NOT NULL, data TEXT, PRIMARY KEY(time,sensor_id,header))",
                "CREATE TABLE deployment_data (deployment_parameter TEXT NOT NULL, parameter_value TEXT NOT NULL, PRIMARY KEY(deployment_parameter))",
-               "CREATE TABLE deployment (deployment_name TEXT, survey_name TEXT, vessel_name TEXT, camera_name TEXT, survey_description TEXT, deployment_time TEXT, deployment_latitude NUMBER, deployment_longitude NUMBER, max_deployment_depth NUMBER, comments TEXT"]
+               "CREATE TABLE deployment (deployment_name TEXT, survey_name TEXT, vessel_name TEXT, camera_name TEXT, survey_description TEXT, deployment_time TEXT, deployment_latitude NUMBER, deployment_longitude NUMBER, max_deployment_depth NUMBER, comments TEXT)"]
 
         #  execute the sql statements
         for s in sql:
