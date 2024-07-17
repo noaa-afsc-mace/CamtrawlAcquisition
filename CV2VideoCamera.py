@@ -172,6 +172,8 @@ class CV2VideoCamera(QtCore.QObject):
         if self.cam:
             if self.cv_backend in ['MSMF','DSHOW']:
                 val = self.cam.get(cv2.CAP_PROP_GAIN)
+            else:
+                val = 0
         else:
             val = 0
 

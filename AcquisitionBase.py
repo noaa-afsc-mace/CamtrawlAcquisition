@@ -60,7 +60,7 @@ from CamtrawlServer import CamtrawlServer
 class AcquisitionBase(QtCore.QObject):
 
     #  specify the application version
-    VERSION = '4.3'
+    VERSION = '4.4'
 
     # CAMERA_CONFIG_OPTIONS defines the default camera configuration options.
     # These values are used if not specified in the configuration file.
@@ -477,6 +477,7 @@ class AcquisitionBase(QtCore.QObject):
                     self.logger.critical("Application exiting...")
                     QtCore.QCoreApplication.instance().quit()
                     return
+
                 version = self.spin_system.GetLibraryVersion()
                 self.logger.info('Spinnaker/PySpin library version: %d.%d.%d.%d' % (version.major,
                         version.minor, version.type, version.build))
@@ -606,6 +607,10 @@ class AcquisitionBase(QtCore.QObject):
                 else:
                     #  if port is not defined, we assume the sensor is not local
                     port = None
+
+                #  if ignore_headers is not specified in the config, add it
+                if 'ignore_headers' not in self.configuration['sensors']['installed_sensors'][sensor_name]:
+                    self.configuration['sensors']['installed_sensors'][sensor_name]['ignore_headers'] = []
 
                 #  check if we're adding a header to this sensor's data messages
                 if 'add_header' in self.configuration['sensors']['installed_sensors'][sensor_name]:
@@ -1836,6 +1841,11 @@ class AcquisitionBase(QtCore.QObject):
 
         #  check if we should log this data
         if sensor_id in self.configuration['sensors']['installed_sensors']:
+
+            #  check if we're supposed to ignore this datagram
+            if header in self.configuration['sensors']['installed_sensors'][sensor_id]['ignore_headers']:
+                #  this is a sensor header that we are ignoring so we just move along
+                return
 
             #  determine if this data is synced or async
             is_synchronous = self.default_is_synchronous

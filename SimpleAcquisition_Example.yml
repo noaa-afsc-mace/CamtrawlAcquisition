@@ -205,24 +205,36 @@ sensors:
     installed_sensors:
         #  Specify the name of the sensor - the sensor names must be unique
         #altimeter:
-            # Specify asynchronous or synchronous logging for this sensors datagrams.
+
+            # Specify asynchronous or synchronous logging for this sensor's datagrams.
             # Datagrams whose headers aren't explicitly configured as synced_headers
             # or async_headers will be logged this way. If type is omitted, the sensor
             # will be logged as specified in default_type above.
             #type: asynchronous
+
             # If needed, you can configure sync and async logging for individual datagram
             # types by defining the headers in the synced_headers and/or async_headers
             # list. If these fields are omitted, all datagrams will be logged according to
             # the type (specified above)
-            #synced_headers: [$GPGGA]
+            #synced_headers: [$GPRMC]
             #async_headers: [$GPZDA]
+
+            #  Some sensors may output a number of unneeded datagrams. You can specify
+            #  specific datagrams to be ignored by adding them to the ingore_headers list.
+            #ignore_headers: [$GPGGA, $GPGLL, $GPGSV, $GPGSA, $GPVTG]
+
             #  Specify the serial port. This is passed directly to pySerial and can be a local
             #  serial port like "COM3" or "/dev/ttyUSB0" or "rfc2217://192.168.10.1:12345" or
             #   "socket://192.168.0.10:98765" See the pySerial documentation for more info.
+            #  You can now also specify a local UDP port to receive UDP based sensor data:
+            #  "udp://0.0.0.0:5432". Note that the IP address is ignored (only the port
+            #  is used) and you can only receive data on UDP ports.
             #serial_port: COM4
+
             #  Specify the baud rate of this sensors serial port. I believe this would be ignored
             #  for network based ports.
             #serial_baud: 9600
+
             # For sensors that do not generate a header, you can add one by including the
             # add_header parameter. Set this to the string that will be prepended to the sensor
             # data when it is received. This allows you to more easily ID this data. If omitted
@@ -230,6 +242,7 @@ sensors:
             # defined here only outputs a height off bottom as "123.4m\n". By setting add_header
             # to "$ALTIM" the camera system will see this data as "$ALTIM,123.4m\n"
             #add_header: $ALTIM
+
             # You can specify a logging interval to log data in the database at a slower rate
             # than it is being received to limit the volume of data stored in the database.
             # Data is still made available to the system (including the server) at the sesnor's
