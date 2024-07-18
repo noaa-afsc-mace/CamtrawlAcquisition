@@ -96,8 +96,6 @@ class UDPDevice(QObject):
             portParts = deviceParams['port'].split(':')
             self.ip = portParts[1].strip('/')
             self.port = int(portParts[2])
-            self.udp_socket = QtNetwork.QUdpSocket()
-            self.udp_socket.readyRead.connect(self.udp_data_available)
 
         except Exception as e:
             self.SerialError.emit(self.deviceName, SerialError('Unable to create UDP based port for ' +
@@ -112,9 +110,11 @@ class UDPDevice(QObject):
         """
 
         #  check that we're not currently bound
-        if self.udp_socket.state() == 0:
+        if self.udp_socket is None:
             try:
-                #  open the UDP port
+                #  create and open the UDP port
+                self.udp_socket = QtNetwork.QUdpSocket()
+                self.udp_socket.readyRead.connect(self.udp_data_available)
                 self.udp_socket.bind(self.port)
 
             except Exception as e:

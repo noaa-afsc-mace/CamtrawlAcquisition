@@ -114,6 +114,7 @@ class CamtrawlAcquisition(AcquisitionBase):
                 self.configuration['sensors']['asynchronous'].extend(['$CTCS', '$SBCS', '$IMUC', '$CTSV', 'setPCState'])
                 self.configuration['sensors']['installed_sensors']['CTControl'] = {}
                 self.configuration['sensors']['installed_sensors']['CTControl']['logging_interval_ms'] = None
+                self.configuration['sensors']['installed_sensors']['CTControl']['ignore_headers'] = []
 
                 #  start the controller.
                 self.StartController()

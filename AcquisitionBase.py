@@ -608,7 +608,7 @@ class AcquisitionBase(QtCore.QObject):
                     #  if port is not defined, we assume the sensor is not local
                     port = None
 
-                #  if ignore_headers is not specified in the config, add it
+                #  check if 'ignore_headers' is set and add an empty list if it is missing
                 if 'ignore_headers' not in self.configuration['sensors']['installed_sensors'][sensor_name]:
                     self.configuration['sensors']['installed_sensors'][sensor_name]['ignore_headers'] = []
 
@@ -1374,6 +1374,8 @@ class AcquisitionBase(QtCore.QObject):
         self.received = {}
         self.hw_triggered_cameras = []
         self.cameras = {}
+        self.enumerated_cameras = []
+        self.spin_cameras = {}
 
         #  now we'll wait a bit to allow the serial ports and server to finish closing.
         self.acqisition_teardown_tries = 0
