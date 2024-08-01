@@ -89,7 +89,6 @@ class metadata_db(QtCore.QObject):
         images table and returns the next number in the sequence.
         '''
 
-
         sql = "SELECT MAX(number) FROM images"
         query = QtSql.QSqlQuery(sql, self.db)
         query.first()
@@ -152,9 +151,9 @@ class metadata_db(QtCore.QObject):
         query.exec_()
 
 
-    def set_metadata_info(self, vessel_name, survey_name, camera_name, description, deployment_time):
+    def set_deployment_metadata(self, vessel_name, survey_name, camera_name, description, start_time):
         '''
-        set_metadata_info inserts the "general" deployment metadata (stuff that is known when the
+        set_deployment_metadata inserts the "general" deployment metadata (stuff that is known when the
         app starts.) Additional data such as deployment lat/lon or max depth are not set and if
         populated, would be set post recovery.
         '''
@@ -168,10 +167,23 @@ class metadata_db(QtCore.QObject):
         if description is None:
             description = ''
 
-        time_str = self.datetime_to_db_str(deployment_time)
-        sql = ("INSERT INTO deployment (survey_name,vessel_name,camera_name,survey_description,deployment_time) " +
+        time_str = self.datetime_to_db_str(start_time)
+        sql = ("INSERT INTO deployment (survey_name,vessel_name,camera_name,survey_description,start_time) " +
                 "VALUES ('" + survey_name + "','" + vessel_name + "','" + camera_name + "','" +
                 description + "','" + time_str + "')")
+        print(sql)
+        query = QtSql.QSqlQuery(sql, self.db)
+        query.exec_()
+
+
+    def update_deployment_endtime(self, end_time):
+        '''
+        update_deployment_endtime is called when acquisition stops and updates the deployment
+        end time.
+        '''
+
+        time_str = self.datetime_to_db_str(end_time)
+        sql = ("UPDATE deployment SET end_time='" + time_str +"')")
 
         query = QtSql.QSqlQuery(sql, self.db)
         query.exec_()
@@ -216,7 +228,7 @@ class metadata_db(QtCore.QObject):
                "CREATE TABLE sensor_data (number INTEGER NOT NULL, time TEXT NOT NULL, sensor_id TEXT NOT NULL, header TEXT NOT NULL, data TEXT, PRIMARY KEY(number,time,sensor_id,header))",
                "CREATE TABLE async_data (time TEXT NOT NULL, sensor_id TEXT NOT NULL, header TEXT NOT NULL, data TEXT, PRIMARY KEY(time,sensor_id,header))",
                "CREATE TABLE deployment_data (deployment_parameter TEXT NOT NULL, parameter_value TEXT NOT NULL, PRIMARY KEY(deployment_parameter))",
-               "CREATE TABLE deployment (deployment_name TEXT, survey_name TEXT, vessel_name TEXT, camera_name TEXT, survey_description TEXT, deployment_time TEXT, deployment_latitude NUMBER, deployment_longitude NUMBER, max_deployment_depth NUMBER, comments TEXT)"]
+               "CREATE TABLE deployment (deployment_name TEXT, survey_name TEXT, vessel_name TEXT, camera_name TEXT, survey_description TEXT, start_time TEXT, end_time TEXT, latitude NUMBER, longitude NUMBER, max_depth NUMBER, comments TEXT)"]
 
         #  execute the sql statements
         for s in sql:

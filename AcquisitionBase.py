@@ -520,9 +520,9 @@ class AcquisitionBase(QtCore.QObject):
         #  open/create the image metadata database file
         self.OpenDatabase()
 
-        #  insert the metadata metadata
+        #  insert the deployment metadata
         if self.use_db:
-            self.db.set_metadata_info(self.configuration['metadata']['vessel_name'],
+            self.db.set_deployment_metadata(self.configuration['metadata']['vessel_name'],
                     self.configuration['metadata']['survey_name'],
                     self.configuration['metadata']['camera_name'],
                     self.configuration['metadata']['survey_description'],
@@ -1356,10 +1356,11 @@ class AcquisitionBase(QtCore.QObject):
             #  none of the sensor serial ports are open so there's nothing to wait for
             self.serial_threads_finished = True
 
-
         #  if we're using the database, close it
         if self.use_db and self.db.is_open:
             self.logger.info("Closing the database...")
+            end_time = datetime.datetime.now()
+            self.db.update_deployment_endtime(end_time)
             self.db.close()
 
         #  same with the server
