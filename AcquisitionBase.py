@@ -368,10 +368,11 @@ class AcquisitionBase(QtCore.QObject):
         try:
             cal_path = os.path.normpath(self.configuration['application']['calibration_path'])
             dest_dir = os.path.normpath(self.base_dir + os.sep + 'calibration')
+
             if os.path.exists(cal_path):
                 #  first do a sanity check on the number of files - since this is a blind
                 #  recursive copy, we limit the total number of files to a handful
-                n_check = glob(os.path.join(cal_path, '**', '*'), recursive=True)
+                n_check = len(glob.glob(os.path.join(cal_path, '**', '*'), recursive=True))
 
                 if n_check > self.MAX_CAL_FOLDER_FILES:
                     #  too many files in the cal folder
