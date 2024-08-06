@@ -152,6 +152,7 @@ class SpinCamera(QtCore.QObject):
         self.exposure = self.cam.ExposureTime.GetValue()
         self.gain = self.cam.Gain.GetValue()
         self.pixelFormat = self.cam.PixelFormat.GetValue()
+        self.auto_exposure = bool(self.cam.ExposureAuto.GetValue())
 
         #  initialize the HDR parameters
         self.hdr_parameters = self.get_hdr_settings()
@@ -345,6 +346,12 @@ class SpinCamera(QtCore.QObject):
         #  number of triggers in this collection event. This will always be
         #  1 for standard acquisition and 4 for HDR acquisition.
         self.n_triggered = 1
+
+        #  if we're running in auto exposure mode, update the exposure value to
+        #  ensure that this instance is in sync with the camera.
+        if self.auto_exposure:
+            self.exposure = self.cam.ExposureTime.GetValue()
+            print(self.exposure)
 
         #  check if we should trigger because of the divider
         if (self.total_triggers % self.trigger_divider) != 0:
@@ -837,7 +844,7 @@ class SpinCamera(QtCore.QObject):
         return binning
 
 
-    def set_exposure(self, exposure_us):
+    def set_exposure(self, exposure_us, nodemap=None):
 
         result = True
 
@@ -847,16 +854,39 @@ class SpinCamera(QtCore.QObject):
 
                 #  First need to disable auto exposure
                 self.cam.ExposureAuto.SetValue(PySpin.ExposureAuto_Off)
+                self.auto_exposure = False
 
                 # Set the exposure. Make sure exposure doesn't exceed the camera min/max
                 exposure_time_to_set = min(self.cam.ExposureTime.GetMax(), exposure_us)
                 exposure_time_to_set = max(self.cam.ExposureTime.GetMin(), exposure_time_to_set)
                 self.cam.ExposureTime.SetValue(exposure_time_to_set)
-                self.exposure = exposure_time_to_set
 
             else:
-                #  turn on auto exposure
+                #  get the auto exposure bounds and the current exposure setting, then clamp
+                #  the current exposure setting to the auto bounds. This ensures that the first
+                #  image acquired after switching to auto exposure falls within the limits.
+
+                if nodemap is None:
+                    nodemap = self.cam.GetNodeMap()
+
+                auto_exp_min = PySpin.CFloatPtr(nodemap.GetNode("AutoExposureTimeLowerLimit")).GetValue()
+                auto_exp_max = PySpin.CFloatPtr(nodemap.GetNode("AutoExposureTimeUpperLimit")).GetValue()
+                exposure_time_to_set = self.cam.ExposureTime.GetValue()
+
+                #  clamp exposure value if necessary
+                if exposure_time_to_set < auto_exp_min:
+                    self.cam.ExposureTime.SetValue(auto_exp_min)
+                    exposure_time_to_set = auto_exp_min
+                elif exposure_time_to_set > auto_exp_max:
+                    self.cam.ExposureTime.SetValue(auto_exp_max)
+                    exposure_time_to_set = auto_exp_max
+
+                #  now turn on auto exposure
                 self.cam.ExposureAuto.SetValue(PySpin.ExposureAuto_Continuous)
+                self.auto_exposure = True
+
+            #  update our exposure value
+            self.exposure = exposure_time_to_set
 
         except PySpin.SpinnakerException as ex:
             self.error.emit(self.camera_name, 'Error: %s' % ex)

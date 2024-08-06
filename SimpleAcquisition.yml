@@ -110,7 +110,7 @@ cameras:
     default:
       # If you don't specify a driver in a camera section, the SpinCamera interface will be used.
         gain: 25
-        exposure_us: 4000
+        exposure_us: -1
         label: camera
         # rotation values: none, cw90, cw180, cw270, fliplr, flipud
         rotation:  None
