@@ -62,7 +62,7 @@ cameras:
 #
 #    SpinCamera - Uses the Flir Spinnaker SDK and PySpin Python bindings to control Flir
 #                       machine vision cameras. These must be installed to use this driver.
-#    CV2VideoCapture - Uses the OpenCV VideoCapture class. This is a fairly generic interface
+#    CV2VideoCamera - Uses the OpenCV VideoCapture class. This is a fairly generic interface
 #                              that supports a wide array of devices thru a crazy number of backends.
 #                              The specific backends available to you depend on how your OpenCV
 #                              was compiled and not all of the configuration options are supported
@@ -73,23 +73,24 @@ cameras:
 #  Since these drivers have different interfaces and offer different levels of control, not
 #  all configuration options are going to be applicable to all camera + driver combinations.
 
-#  #  This is an example of using the CV2VideoCapture driver to capture images.
+#  #  This is an example of using the CV2VideoCamera driver to capture images.
 #    Webcam_1:
 #        label: webcam
 #        trigger_divider: 1
-#        driver:  CV2VideoCapture
-#        cv2_cam_backend: DSHOW
+#        driver:  CV2VideoCamera
+#        cv2_cam_backend: DSHOW   # (Windows preferred)
+#        cv2_cam_backend: V4L2      # (Linux preferred)
 #        cv2_cam_path: 1
 #        cv2_cam_width: 1280
 #        cv2_cam_height: 720
 #
-#      #  gain may or may not be supported depending on the back end the CV2VideoCapture is
+#      #  gain may or may not be supported depending on the back end CV2VideoCapture is
 #      #  using and your specific camera. If your camera doesn't support gain it will be ignored.
 #        gain: 1
 #
-#      #  the CV2VideoCapture driver exposure value is configured using the 'exposure' keyword
+#      #  the CV2VideoCamera driver exposure value is configured using the 'exposure' keyword
 #      #  (which is different from the SpinCamera 'exposure_us' keyword.). The valid range and units
-#      #  are specific to the back end the CV2VideoCapture driver uses and your camera.
+#      #  are specific to the back end CV2VideoCapture uses and your camera.
 #      #  Valid exposure values for the Microsoft LifeCam HD-3000 are -11 to 1
 #        exposure:  -5
 #

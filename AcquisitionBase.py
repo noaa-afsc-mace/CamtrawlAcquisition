@@ -413,8 +413,11 @@ class AcquisitionBase(QtCore.QObject):
                 driver = self.configuration['cameras'][camera]['driver'].lower()
                 #  make sure we know about this driver
                 if driver not in self.VALID_DRIVERS:
-                    self.logger.warning("Camera '" + camera + "' has an unknown driver '" + camera['driver'] +
-                            "' specified. This camera will be ignored.")
+                    valid_drivers_str = ','.join(self.VALID_DRIVERS)
+                    self.logger.warning("Camera '" + camera + "' has an unknown driver '" +
+                            self.configuration['cameras'][camera]['driver'] +
+                            "' specified. (valid drivers: " + valid_drivers_str + ") " +
+                            "This camera will be ignored.")
                     continue
                 #  we do, so we add it to the list, if needed
                 if driver not in drivers:
@@ -449,8 +452,7 @@ class AcquisitionBase(QtCore.QObject):
                     #  if they aren't already there.
                     for camera in spin_cameras:
 
-                        #  extract the camera name from the Spin camera pointer - 'tis a
-                        #  bit involved....
+                        #  extract the camera name from the Spin camera pointer - 'tis a bit involved....
                         device_info = {}
                         nodemap_tldevice = camera.GetTLDeviceNodeMap()
                         node_device_information = PySpin.CCategoryPtr(nodemap_tldevice.GetNode('DeviceInformation'))
@@ -797,7 +799,10 @@ class AcquisitionBase(QtCore.QObject):
                         backend = None
 
                     #  get the exposure config value for this driver
-                    this_exposure = config['exposure']
+                    if 'exposure' in config:
+                        this_exposure = config['exposure']
+                    else:
+                        this_exposure = None
 
                     try:
                         #  create an instance of CV2VideoCamera
@@ -908,7 +913,8 @@ class AcquisitionBase(QtCore.QObject):
                 #ok = sc.set_strobe_trigger(1)
 
                 #  set the camera exposure, gain, and rotation
-                sc.set_exposure(this_exposure)
+                if this_exposure:
+                    sc.set_exposure(this_exposure)
                 sc.set_gain(config['gain'])
                 sc.rotation = config['rotation']
                 self.logger.info('    %s: label: %s  gain: %d  exposure_us: %d  rotation:%s' %

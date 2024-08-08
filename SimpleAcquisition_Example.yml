@@ -294,7 +294,7 @@ cameras:
         # Specify the gain. Values are specific to the driver and camera you are using. It is
         # your responsibility to set reasonable values. Setting gain is always supported
         # when using the SpinCamera driver but may not be supported when using the
-        # CV2VideoCapture driver.
+        # CV2VideoCamera driver.
         gain: 15
 
         # Specify the exposure in microseconds - valid values depend on the camera used
@@ -464,9 +464,29 @@ cameras:
 
     Webcam_1:
         label: webcam
-        driver:  CV2VideoCapture
+        driver:  CV2VideoCamera
+
+        #  cv2_cam_path contains the path to your CV2VideoCapture device. On windows this
+        #  will be a number, starting at 1 (?) and on linux it can be a number starting at 0 or
+        #  (I believe) it can be the device path (/dev/video0.) More information can be found
+        #  in the openCV docs.
         cv2_cam_path: 1
 
+        #  cv2_cam_backend allows you to set the backend used by the CV2VideoCamera driver.
+        #  Available backends depend on your platform and how OpenCV was compiled but usually
+        #  you will want 'V4L2' on linux systems and 'DSHOW' on Windows but I haven't really
+        #  explored all of the drivers. Different drivers provide different levels of control over the
+        #  camera. For example, on Linux, the default GSTREAMER backend doesn't allow you to
+        #  set the camera resolution while V4L2 does.
+        # cv2_cam_backend
+        cv2_cam_backend: V4L2      # (Linux preferred)
+
+        #  You can set the camera resolution with the cv2_cam_width and cv2_cam_height options.
+        #  Not all backends support setting camera resolution. For example, GSTREAMER doesn't,
+        #  but V4L2 does. Note that there may be limitations to this, like the values may need to
+        #  be divisible by 2, or maybe only specific resolutions (1280x720, 1920x1080.)
+        cv2_cam_width: 1280
+        cv2_cam_height: 720
 
 
     #  Here are some examples of camera specific settings. The settings in this
