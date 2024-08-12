@@ -59,7 +59,7 @@ class CamtrawlClientExample(QtCore.QObject):
     #  specify the interval in ms that sensor data will be requested (and optionally) sent
     SENSOR_DATA_INTERVAL = 1000
 
-    #  specify a list containing some fake sensor data to send if sendSensorData is True
+    #  specify a list containing some fake sensor data to send if SendSensorData is True
     SENSOR_DATA_DATA = [['GPS','$GPRMC,235951.00,A,5635.8679,N,15335.9930,W,13.1,227.2,070524,13.3,E,D*2F'],
                         ['Temperature','$YCMTW,7.1,C,44.8,F']]
 
@@ -93,13 +93,13 @@ class CamtrawlClientExample(QtCore.QObject):
         #  client receives sensor or control data from the server. In this
         #  example we don't make a distinction between synced and async sensors
         #  so we connect both of them to the same slot.
-        self.client.syncSensorData.connect(self.GetSensorData)
-        self.client.asyncSensorData.connect(self.GetSensorData)
+        self.client.syncSensorData.connect(self.ReceiveSensorData)
+        self.client.asyncSensorData.connect(self.ReceiveSensorData)
 
         #  the parameterData signal is emitted after a getParameter or
         #  set parameter call and it will contain the current parameter
         #  value that was requested or set.
-        self.client.parameterData.connect(self.GetParamData)
+        self.client.parameterData.connect(self.ReceiveParamData)
 
         #  The error signal is emitted when the client encounters an
         #  error. The errors will primarily be socket related errors.
@@ -131,9 +131,9 @@ class CamtrawlClientExample(QtCore.QObject):
 
         #  create a couple of timers to request sensor data (and optionally) send it
         self.sendSensorTimer = QtCore.QTimer(self)
-        self.sendSensorTimer.timeout.connect(self.sendSensorData)
+        self.sendSensorTimer.timeout.connect(self.SendSensorData)
         self.getSensorTimer = QtCore.QTimer(self)
-        self.getSensorTimer.timeout.connect(self.getSensorData)
+        self.getSensorTimer.timeout.connect(self.RequestSensorData)
 
         #  set a timer to allow the event loop to start before continuing
         timer = QtCore.QTimer(self)
@@ -143,9 +143,9 @@ class CamtrawlClientExample(QtCore.QObject):
 
 
     @QtCore.pyqtSlot()
-    def sendSensorData(self):
+    def SendSensorData(self):
         '''
-        sendSensorData sends fake sensor data to the server as an example of
+        SendSensorData sends fake sensor data to the server as an example of
         how to send data to the server. It is periodically called by a timer to
         simulate actual sensors.
         '''
@@ -157,7 +157,7 @@ class CamtrawlClientExample(QtCore.QObject):
 
 
     @QtCore.pyqtSlot()
-    def getSensorData(self):
+    def RequestSensorData(self):
         '''
         getSensorData sends a request to the server for sensor data. In this example
         we are using a timer to periodically request sensor data.
@@ -277,9 +277,9 @@ class CamtrawlClientExample(QtCore.QObject):
 
 
     @QtCore.pyqtSlot(str, str, datetime.datetime, str)
-    def GetSensorData(self, sensor_id, header, time, data):
+    def ReceiveSensorData(self, sensor_id, header, time, data):
         '''
-        The GetSensorData slot is called when the client receives the response
+        The ReceiveSensorData slot is called when the client receives the response
         from a GetData request.
         '''
 
@@ -288,9 +288,9 @@ class CamtrawlClientExample(QtCore.QObject):
 
 
     @QtCore.pyqtSlot(str, str, str, bool, str)
-    def GetParamData(self, module, parameter, value, ok, err_string):
+    def ReceiveParamData(self, module, parameter, value, ok, err_string):
         '''
-        The GetParamData slot is called when the client receives a response from
+        The ReceiveParamData slot is called when the client receives a response from
         either a getParameter or setParameter request
         '''
 
