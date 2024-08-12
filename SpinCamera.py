@@ -351,7 +351,7 @@ class SpinCamera(QtCore.QObject):
         #  ensure that this instance is in sync with the camera.
         if self.auto_exposure:
             self.exposure = self.cam.ExposureTime.GetValue()
-            print(self.exposure)
+            #print(self.exposure)
 
         #  check if we should trigger because of the divider
         if (self.total_triggers % self.trigger_divider) != 0:
