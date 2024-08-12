@@ -42,6 +42,7 @@ import cv2
 from CamtrawlServer import CamtrawlClient
 from PyQt5 import QtCore
 
+
 class CamtrawlClientExample(QtCore.QObject):
     '''
     CamtrawlClientExample is a simple example of using the Camtrawl client
@@ -52,9 +53,24 @@ class CamtrawlClientExample(QtCore.QObject):
     See the BOTTOM of the script for options.
     '''
 
-    def __init__(self, host, port, compressed, scale, quality):
+    #  specify the server timeout in ms
+    SERVER_TIMEOUT = 3000
 
-        super(CamtrawlClientExample, self).__init__()
+    #  specify the interval in ms that sensor data will be requested (and optionally) sent
+    SENSOR_DATA_INTERVAL = 1000
+
+    #  specify a list containing some fake sensor data to send if sendSensorData is True
+    SENSOR_DATA_DATA = [['GPS','$GPRMC,235951.00,A,5635.8679,N,15335.9930,W,13.1,227.2,070524,13.3,E,D*2F'],
+                        ['Temperature','$YCMTW,7.1,C,44.8,F']]
+
+    #  define PyQt Signals
+    stopApp = QtCore.pyqtSignal(bool)
+
+
+    def __init__(self, host, port, compressed, scale, quality, txSensorData=False,
+        parent=None):
+
+        super(CamtrawlClientExample, self).__init__(parent)
 
         #  store the server's host and port info
         self.host = str(host)
@@ -64,6 +80,7 @@ class CamtrawlClientExample(QtCore.QObject):
         self.compressed = compressed
         self.scale = scale
         self.quality = quality
+        self.txSensorData = txSensorData
 
         #  create an instance of our CamtrawlClient and connect its signals
         self.client = CamtrawlClient.CamtrawlClient()
@@ -95,8 +112,10 @@ class CamtrawlClientExample(QtCore.QObject):
         #  from the server
         self.client.disconnected.connect(self.disconnected)
 
+        #  connect the stopApp signal to the shutdown method.
+        self.stopApp.connect(self.shutdown)
+
         #  create a logger
-        #  get our logger
         self.logger = logging.getLogger(__name__)
         self.logger.propagate = False
         self.logger.setLevel('DEBUG')
@@ -105,11 +124,50 @@ class CamtrawlClientExample(QtCore.QObject):
         consoleLogger.setFormatter(formatter)
         self.logger.addHandler(consoleLogger)
 
+        #  create a timeout timer that is called when we disconnect from the server
+        self.timeoutTimer = QtCore.QTimer(self)
+        self.timeoutTimer.timeout.connect(self.disconnected)
+        self.timeoutTimer.setSingleShot(True)
+
+        #  create a couple of timers to request sensor data (and optionally) send it
+        self.sendSensorTimer = QtCore.QTimer(self)
+        self.sendSensorTimer.timeout.connect(self.sendSensorData)
+        self.getSensorTimer = QtCore.QTimer(self)
+        self.getSensorTimer.timeout.connect(self.getSensorData)
+
         #  set a timer to allow the event loop to start before continuing
         timer = QtCore.QTimer(self)
         timer.timeout.connect(self.connectToServer)
         timer.setSingleShot(True)
         timer.start(0)
+
+
+    @QtCore.pyqtSlot()
+    def sendSensorData(self):
+        '''
+        sendSensorData sends fake sensor data to the server as an example of
+        how to send data to the server. It is periodically called by a timer to
+        simulate actual sensors.
+        '''
+
+        for data in self.SENSOR_DATA_DATA:
+            sensorTime = datetime.datetime.now()
+            self.logger.debug("Sending Sensor Data: " + " : " + data[0] + " : "  + data[1])
+            self.client.setData(data[0], data[1], time=sensorTime)
+
+
+    @QtCore.pyqtSlot()
+    def getSensorData(self):
+        '''
+        getSensorData sends a request to the server for sensor data. In this example
+        we are using a timer to periodically request sensor data.
+        '''
+        #  call the client's getData method. We do not provide a sensorID so we'll get data
+        #  from all sensors
+        self.client.getData()
+
+        #  An example of setting the sensorID argument to get GPS data only:
+        #self.client.getData(sensorID='GPS')
 
 
     @QtCore.pyqtSlot()
@@ -121,7 +179,7 @@ class CamtrawlClientExample(QtCore.QObject):
         '''
 
         #  connect to the server - the client will emit the connected signal when it's connected.
-        self.logger.debug("Connecting to server %s:%i" % (self.host, self.port))
+        self.logger.info("Connecting to server %s:%i" % (self.host, self.port))
         self.client.connectToServer(self.host, self.port)
 
 
@@ -167,32 +225,37 @@ class CamtrawlClientExample(QtCore.QObject):
 
         #  In this example we're simply going to display images as they are received.
 
-        #  put some text on the image
+        #  put some text on the image - first set the text color
         if (len(imageData['data'].shape) == 2):
             #  image is mono
             textColor = (200)
         else:
             textColor = (20,245,20)
 
-        cv2.putText(imageData['data'],'Camera: ' + camera, (10,50),
+        #  Starting with OpenCV4.9 you cannot write to the image data array directly
+        #  so we'll make a copy of the image.
+        displayImage = imageData['data'].copy()
+
+        #  now add the text
+        cv2.putText(displayImage,'Camera: ' + camera, (10,50),
                 cv2.FONT_HERSHEY_SIMPLEX, 1.5, textColor, 4)
-        cv2.putText(imageData['data'],'Label: ' + label, (10,100),
+        cv2.putText(displayImage,'Label: ' + label, (10,100),
                 cv2.FONT_HERSHEY_SIMPLEX, 1.5, textColor, 4)
-        cv2.putText(imageData['data'],'Image number: ' + str(imageData['image_number']), (10,150),
+        cv2.putText(displayImage,'Image number: ' + str(imageData['image_number']), (10,150),
                 cv2.FONT_HERSHEY_SIMPLEX, 1.5, textColor, 4)
-        cv2.putText(imageData['data'],'Filename: ' + imageData['filename'], (10,200),
+        cv2.putText(displayImage,'Filename: ' + imageData['filename'], (10,200),
                 cv2.FONT_HERSHEY_SIMPLEX, 1.5, textColor, 4)
-        cv2.putText(imageData['data'],'Time: ' + str(imageData['timestamp']), (10,250),
+        cv2.putText(displayImage,'Time: ' + str(imageData['timestamp']), (10,250),
                 cv2.FONT_HERSHEY_SIMPLEX, 1.5, textColor, 4)
-        cv2.putText(imageData['data'],'Size: ' + str(imageData['width']) + ' x ' +
+        cv2.putText(displayImage,'Size: ' + str(imageData['width']) + ' x ' +
                 str(imageData['height']), (10,300), cv2.FONT_HERSHEY_SIMPLEX, 1.5, textColor, 4)
-        cv2.putText(imageData['data'],'Exposure: ' + str(imageData['exposure']) + ' us', (10,350),
+        cv2.putText(displayImage,'Exposure: ' + str(imageData['exposure']) + ' us', (10,350),
                 cv2.FONT_HERSHEY_SIMPLEX, 1.5, textColor, 4)
-        cv2.putText(imageData['data'],'Gain: ' + str(imageData['gain']), (10,400),
+        cv2.putText(displayImage,'Gain: ' + str(imageData['gain']), (10,400),
                 cv2.FONT_HERSHEY_SIMPLEX, 1.5, textColor, 4)
 
         #  and then show it
-        cv2.imshow(camera, imageData['data'])
+        cv2.imshow(camera, displayImage)
 
         #  Now request another image from this camera. A new image will be sent
         #  as soon as it is available. Back to back requests for the same camera
@@ -220,7 +283,7 @@ class CamtrawlClientExample(QtCore.QObject):
         from a GetData request.
         '''
 
-        self.logger.debug("Sensor Data received: " + str(time) + " : " + sensor_id +
+        self.logger.info("Sensor Data received: " + str(time) + " : " + sensor_id +
                 " : "  + data)
 
 
@@ -231,7 +294,7 @@ class CamtrawlClientExample(QtCore.QObject):
         either a getParameter or setParameter request
         '''
 
-        self.logger.debug("Get/SetParameter response received for module: " + module +
+        self.logger.info("Get/SetParameter response received for module: " + module +
             " parameter: " + parameter + " value:" + value + " ok:" + str(ok))
 
 
@@ -245,17 +308,34 @@ class CamtrawlClientExample(QtCore.QObject):
         for cam in self.client.cameras:
             cv2.namedWindow(cam, cv2.WINDOW_NORMAL)
 
-        self.logger.debug("Connected to the server. Requesting images...")
+        self.logger.info("Connected to the server. Requesting images...")
 
         #  now request images from all of the cameras
         self.client.getImage(self.client.cameras.keys(), compressed=self.compressed,
                 scale=self.scale, quality=self.quality)
 
+        #  start the get sensor data timer
+        self.getSensorTimer.start(self.SENSOR_DATA_INTERVAL)
+
+        #  if we're senting test sensor data, start that timer here
+        if self.txSensorData:
+            self.sendSensorTimer.start(self.SENSOR_DATA_INTERVAL)
+
 
     @QtCore.pyqtSlot()
     def disconnected(self):
-        self.logger.debug("Disconnected from the server. Shutting down...")
+        '''
+        disconnected is called when we disconnect from the server.
+        '''
+        self.logger.info("Disconnected from the server. Shutting down...")
+
+        #  stop the timeout timer (if it was started)
+        self.timeoutTimer.stop()
+
+        #  clean up code goes here - in this example, we just need to destroy the OpenCV window
         cv2.destroyAllWindows()
+
+        #  finally, exit the application
         QtCore.QCoreApplication.instance().quit()
 
 
@@ -276,6 +356,34 @@ class CamtrawlClientExample(QtCore.QObject):
         QtCore.QCoreApplication.instance().quit()
 
 
+    @QtCore.pyqtSlot()
+    def shutdown(self):
+        '''
+        shutdown is called when the stopApp signal is received. It will disconnect from the server
+        and also start a timeout timer
+        '''
+
+        #  stop the sensor data timers
+        self.sendSensorTimer.stop()
+        self.getSensorTimer.stop()
+
+        #  tell the client to disconnect - if the client responds, the disconnected method will be called.
+        self.client.disconnectFromServer()
+
+        #  start a timeout timer that will force a shutdown if the server never responds
+        self.timeoutTimer.start(self.SERVER_TIMEOUT)
+
+
+    def ExternalStop(self):
+        '''
+        ExternalStop is called when one of the main thread exit handlers are called.
+        It emits a stop signal that is then received by the QCoreApplication which then
+        shuts everything down in the QCoreApplication thread.
+        '''
+        self.stopApp.emit(True)
+
+
+
 def exitHandler(a,b=None):
     '''
     exitHandler is called when CTRL-c is pressed on Windows
@@ -286,7 +394,7 @@ def exitHandler(a,b=None):
         #  make sure we only act on the first ctrl-c press
         ctrlc_pressed = True
         print("CTRL-C detected. Shutting down...")
-        client.disconnectFromServer()
+        clientApp.ExternalStop()
 
     return True
 
@@ -303,7 +411,7 @@ def signal_handler(*args):
         #  make sure we only act on the first ctrl-c press
         ctrlc_pressed = True
         print("CTRL-C or SIGTERM/SIGHUP detected. Shutting down...")
-        client.disconnectFromServer()
+        clientApp.ExternalStop()
 
     return True
 
@@ -315,8 +423,8 @@ if __name__ == "__main__":
     #  set to the server host IP - if you're running this on the same machine
     #  as CamtrawlAcquisition or ImageServerSim set it to the loopback address.
     #  Otherwise specify the IP of the computer running one of those applications.
-    host = '192.168.0.200'
-    #host = '127.0.0.1'
+    #host = '192.168.0.200'
+    host = '127.0.0.1'
 
     #  set to the server port - the default port for the server is 7889 and it is
     #  set in the CamtrawlAcquisition .ini file.
@@ -329,13 +437,20 @@ if __name__ == "__main__":
 
     #  Set scale to a value between 1-100. For values less than 100, the server
     #  will reduce the size of the images before sending.
-    scale = 60
+    scale = 50
 
     #  If compressed is set to True, this specifies the JPEG quality value. Set
     #  it to a value between 50-95. If compressed is False, this value is ignored.
     quality=80
 
+
+    #  set txSensorData to True to periodically send sensor data to the server.
+    #  This data will be logged in the deployment data database and will also
+    #  be available to other clients.
+    txSensorData = True
+
     # =====================================================================
+
 
     #  create a state variable to track if the user typed ctrl-c to exit
     ctrlc_pressed = False
@@ -353,12 +468,11 @@ if __name__ == "__main__":
         signal.signal(signal.SIGTERM, signal_handler)
         signal.signal(signal.SIGHUP, signal_handler)
 
-    #  create an instance of QCoreApplication
+    #  create an instance of QCoreApplication and and instance of the example client application
     app = QtCore.QCoreApplication(sys.argv)
+    clientApp = CamtrawlClientExample(host, port, compressed, scale, quality,
+            txSensorData=txSensorData, parent=app)
 
-    #  create an instance of our example class
-    client = CamtrawlClientExample(host, port, compressed, scale, quality)
-
-    #  and run
+    #  and start the event loop
     sys.exit(app.exec_())
 

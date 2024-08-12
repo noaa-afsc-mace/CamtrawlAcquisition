@@ -116,11 +116,11 @@ cameras:
         # rotation values: none, cw90, cw180, cw270, fliplr, flipud
         rotation:  None
         sensor_binning: 1
-        trigger_divider: 15
+        trigger_divider: 1
 
         save_stills: True
         still_image_extension: .jpg
-        still_image_divider: 1
+        still_image_divider: 15
         jpeg_quality: 85
         image_scale: 100
 

@@ -100,7 +100,7 @@ import datetime
 import struct
 import numpy
 import cv2
-import CamtrawlServer_pb2
+from . import CamtrawlServer_pb2
 from PyQt5 import QtNetwork, QtCore
 
 
@@ -497,11 +497,11 @@ class CamtrawlClient(QtCore.QObject):
         while (self.socket.bytesAvailable() > 0):
             #  append this data to the receive buffer
             self.datagramBuffer.append(self.socket.readAll())
-            
+
             #  assemble and process datagrams - datagrams are in the form
             #    [size - (uint32) 4 bytes][data - protobuff size bytes]
 
-            #  check if we need to unpack anything. 
+            #  check if we need to unpack anything.
             while ((self.thisDatagramSize == 0 and self.datagramBuffer.length() >= 4) or
                    (self.thisDatagramSize > 0 and self.datagramBuffer.length() >= self.thisDatagramSize)):
 
@@ -626,7 +626,7 @@ class CamtrawlClient(QtCore.QObject):
                             else:
                                 #  this data should be handled as synced
                                 self.syncSensorData.emit(sensor.id, sensor.header, time_obj, sensor.data)
-                                
+
                         self.dataRequestComplete.emit()
 
                     elif (response.type == CamtrawlServer_pb2.msg.msgType.Value('PARAMDATA')):
