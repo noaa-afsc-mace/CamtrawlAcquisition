@@ -5,6 +5,13 @@
 #
 
 
+metadata:
+    vessel_name:
+    survey_name: Example Survey
+    camera_name: Camtrawl-1
+    survey_description:
+
+
 system:
 
     ntp_sync_clock_at_boot: False
@@ -53,20 +60,20 @@ sensors:
     default_type: synchronous
     synchronous_timeout: 5
 
-    installed_sensors:    
+    installed_sensors:
         # altimeter:
             # type: asynchronous
             # add_header: $ALTIM
             # logging_interval_ms: 1000
             # serial_port: /dev/ttyUSB1
             # serial_baud: 9600
-            
+
         # thrusters:
             # type: asynchronous
             # logging_interval_ms: 500
             # serial_port: /dev/ttyUSB0
             # serial_baud: 9600
-            
+
         # clumpweight:
             # type: asynchronous
             # logging_interval_ms: 1000

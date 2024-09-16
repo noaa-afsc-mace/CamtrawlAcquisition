@@ -437,7 +437,7 @@ class AcquisitionBase(QtCore.QObject):
         for driver in drivers:
             if driver == 'spincamera':
                 self.logger.info("At least one camera is configured to use the SpinCamera driver." +
-                        " Initializing SpinCamera...")
+                        " Initializing Spinnaker/PySpin...")
                 try:
                     #  do our imports - we want to import these globally so we
                     #  use our import_module function
@@ -446,7 +446,17 @@ class AcquisitionBase(QtCore.QObject):
 
                     #  set up the camera interface
                     self.spin_system = PySpin.System.GetInstance()
+
+                    #  report the spinnaker version
+                    version = self.spin_system.GetLibraryVersion()
+                    self.logger.info('  Spinnaker/PySpin library version: %d.%d.%d.%d' % (version.major,
+                        version.minor, version.type, version.build))
+
+                    self.logger.info("  Identifying Flir cameras connected to the system:")
                     spin_cameras = self.spin_system.GetCameras()
+
+                    if len(spin_cameras) == 0:
+                        self.logger.info("    No Flir cameras detected!")
 
                     #  now add the cameras spin can enumerate to our list if enumerated cameras
                     #  if they aren't already there.
@@ -468,6 +478,8 @@ class AcquisitionBase(QtCore.QObject):
                         camera_name = device_info['DeviceModelName'] + '_' + \
                                 device_info['DeviceSerialNumber']
 
+                        #  log the detected camera and add it to the spin_cameras list
+                        self.logger.info("    " + camera_name)
                         self.spin_cameras[camera_name] = camera
 
                         if camera_name not in self.enumerated_cameras:
@@ -481,9 +493,7 @@ class AcquisitionBase(QtCore.QObject):
                     QtCore.QCoreApplication.instance().quit()
                     return
 
-                version = self.spin_system.GetLibraryVersion()
-                self.logger.info('Spinnaker/PySpin library version: %d.%d.%d.%d' % (version.major,
-                        version.minor, version.type, version.build))
+
 
             elif driver == 'cv2videocamera':
                 self.logger.info("At least one camera is configured to use the " +
@@ -771,9 +781,15 @@ class AcquisitionBase(QtCore.QObject):
 
                 #  create an instance of the appropriate camera driver class
                 if config['driver'].lower() == 'spincamera':
+                    #  first check that this camera is available
+                    if cam not in self.spin_cameras:
+                        #  a spinnaker camera is specified in the config file but apparently not connected
+                        self.logger.warning("    Spin camera '" + cam + "' specified in configuration file " +
+                                "but is not connected. This camera will be skipped.")
+                        continue
+
                     #  create a camera object that uses Flir Spinnaker/PySpin as the
                     #  interface to the camera.
-
                     sc = SpinCamera.SpinCamera(self.spin_cameras[cam])
 
                     #  get the exposure config value for this driver
@@ -1028,7 +1044,7 @@ class AcquisitionBase(QtCore.QObject):
             else:
                 #  There is no default section and no camera specific section
                 #  so we skip this camera
-                self.logger.info("  Skipped camera: " + sc.camera_name +
+                self.logger.info("  Skipped camera: " + cam +
                         ". No configuration entry found.")
 
         #  we're done with setup
@@ -1759,6 +1775,12 @@ class AcquisitionBase(QtCore.QObject):
         with "/". For example, when setting camera specific parameters, the parameter argument
         would be: "<camera name>/gain" or "<camera name>/exposure"
 
+        module: acquisition
+
+            parameter: start_triggering
+            parameter: stop_triggering
+            parameter: stop_acquisition/<client name>/<shutdown PC>
+
         '''
 
         #  get a list of our current cameras
@@ -1783,6 +1805,21 @@ class AcquisitionBase(QtCore.QObject):
                 if self.isTriggering:
                     self.isTriggering = False
                 self.parameterChanged.emit(module, 'is_triggering', str(int(self.isTriggering)), 1, '')
+
+            elif params[0].lower() == 'stop_acquisition':
+
+                try:
+                    if params[2].lower() in ['yes', 'true', '1', 't']:
+                        shutdown = True
+                        self.logger.info("Stop acquisition command received from client " + params[1] +
+                            ". System will be shut down.")
+                    else:
+                        shutdown = False
+                        self.logger.info("Stop acquisition command received from client " + params[1] +
+                            ". Acquisition program will be terminated but PC will remain running.")
+                    self.StopAcquisition(exit_app=True, shutdown_on_exit=shutdown)
+                except:
+                    pass
 
             #  check if this is a camera specific parameter
             elif params[0] in cam_names:

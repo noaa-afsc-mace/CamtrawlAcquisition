@@ -171,7 +171,6 @@ class metadata_db(QtCore.QObject):
         sql = ("INSERT INTO deployment (survey_name,vessel_name,camera_name,survey_description,start_time) " +
                 "VALUES ('" + survey_name + "','" + vessel_name + "','" + camera_name + "','" +
                 description + "','" + time_str + "')")
-        print(sql)
         query = QtSql.QSqlQuery(sql, self.db)
         query.exec_()
 

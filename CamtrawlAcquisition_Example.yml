@@ -6,6 +6,18 @@
 # will be used. Defaults are defined at the top of CamtrawlAcquisition.py
 #
 
+
+
+#  specify metadata elements common to all deployments for a cruise/survey. This information
+#  (and more) is stored in the deployments table in the metadata database and can be used
+#  to identify datasets collected on a specific survey or by a specific instrument.
+metadata:
+    vessel_name:
+    survey_name: Example Survey
+    camera_name: Camtrawl-1
+    survey_description:
+
+
 #  specify some system options
 #
 #
@@ -202,7 +214,7 @@ controller:
 #
 #  Data can be logged in sync with the images, where the most recent data will be
 #  written at the same time the cameras are triggered, and it can also be logged
-#  at the time it is received or asynchronously. Synced data is written to the 
+#  at the time it is received or asynchronously. Synced data is written to the
 #  metadata database sensor_data table and async data is written to the
 #  async_data table. Data in the sensor_data table is logged with the image number
 #  it is synced with and data in the async_data table includes the time the data was
@@ -225,15 +237,15 @@ sensors:
 
 
     #  synchronous_timeout specifies how long synced sensor data will be cached
-    #  (in seconds.) Data older than this will be ignored and data for that sensor 
+    #  (in seconds.) Data older than this will be ignored and data for that sensor
     #  will not be logged until fresh data is received. Set this to -1 to always
     #  log synced sensor data regardless of freshness.
     synchronous_timeout: 5
 
-    #  specify any additional sensors that should be logged during acquisition. 
-    installed_sensors:    
+    #  specify any additional sensors that should be logged during acquisition.
+    installed_sensors:
         #  Specify the name of the sensor - the sensor names must be unique
-        #altimeter:        
+        #altimeter:
             # Specify asynchronous or synchronous logging for this sensors datagrams.
             # Datagrams whose headers aren't explicitly configured as synced_headers
             # or async_headers will be logged this way. If type is omitted, the sensor
@@ -245,7 +257,7 @@ sensors:
             # the type (specified above)
             #synced_headers: [$GPGGA]
             #async_headers: [$GPZDA]
-            #  Specify the serial port. This is passed directly to pySerial and can be a local 
+            #  Specify the serial port. This is passed directly to pySerial and can be a local
             #  serial port like "COM3" or "/dev/ttyUSB0" or "rfc2217://192.168.10.1:12345" or
             #   "socket://192.168.0.10:98765" See the pySerial documentation for more info.
             #serial_port: COM4
@@ -272,14 +284,14 @@ sensors:
             # logging_interval_ms: 500
             # serial_port: /dev/ttyUSB0
             # serial_baud: 9600
-            
+
         # clumpweight:
             # type: asynchronous
             # logging_interval_ms: 1000
             # serial_port: socket://192.168.10.5:2345
             # serial_baud: 115200
-    
-    
+
+
 # Define the individual camera parameters
 cameras:
 
