@@ -268,7 +268,9 @@ sensors:
 cameras:
 
     # The camera section is used to define which cameras should be used to acquire
-    # images and their settings. It is comprised
+    # images and their settings. The settings included under the default example 
+    # below can be used with camera drivers. The setting included under camera 
+    # specific sections only apply to that specific camera driver.
 
     # The acquisition application will first look for camera specific settings that
     # are in sections defined using the camera name and serial number (for example
@@ -293,11 +295,15 @@ cameras:
     default:
         # Specify the gain. Values are specific to the driver and camera you are using. It is
         # your responsibility to set reasonable values. Setting gain is always supported
-        # when using the SpinCamera driver but may not be supported when using the
-        # CV2VideoCamera driver.
+        # when using the SpinCamera and PiCamera drivers but may not be supported when using the
+        # CV2VideoCamera driver. When using the PiCamera driver, set this to None to use the default
+        # automatic gain control and set both gain and exposure_us to values other than None to 
+        # disable the automatic control.
         gain: 15
 
-        # Specify the exposure in microseconds - valid values depend on the camera used
+        # Specify the exposure in microseconds - valid values depend on the camera used. When using
+        # the PiCamera driver, set this to None to use the default automatic exposure control and 
+        # set both gain and exposure_us to values other than None to disable the automatic control.
         exposure_us: 6000
 
         # Specify the camera label - this is written to the camera table in the metadata database
@@ -319,7 +325,8 @@ cameras:
         #    4 - 4x4 binning for an image that is 1/16 the original size.
         #
         # Not all cameras support 4x4 binning. The value specified must be 1,2, or 4. Other
-        # values will result in sensor binning set to 1 (disabled)
+        # values will result in sensor binning set to 1 (disabled). Currently disabled for 
+        # cameras using CV2VideoCamera and PiCamera drivers.
         sensor_binning: 1
 
         # Set trigger divider to control when this camera responds to a trigger signal.
@@ -488,12 +495,86 @@ cameras:
         cv2_cam_width: 1280
         cv2_cam_height: 720
 
+   PiCamera:
+       label: picam
+       driver: PiCamera
+
+       # (Required) Pi_cam_path contains the path to your Raspberry Pi supported camera device.
+       # The path is a number and begins with 0. If there is only one camera, the path is 0.
+       # picamera2.
+       pi_cam_path: 0
+
+       # (Required) Pi_mode is the camera sensor mode that the Raspberry Pi supported camera should 
+       # use. The mode is a number and the default mode is 0, full sensor resolution. The
+       # mode affects the sensor resolution, maximum capture rate, and pixel binning.
+       # picamera2.camera_sensor_modes() can be used to see the modes available. 
+       pi_mode: 0
+
+       # (Optional) Pi_resolution will set the image width and height by cropping the image.
+       # Default is full resoultion. Use (-1,-1) to get default.
+       # pi_resolution: (-1, -1)
+
+       # TODO - (Optional) Only applicable for Raspberry Pi camera module 3 and will be ignored
+       # for all other Raspberry Pi supported cameras.
+       # auto_focus:
+
+       # (Optional) Sets the auto exposure mode used by the camera. The auto exposure mode
+       # (normal, short, long) is required and constraint (normal, highlight, shadows, none) 
+       # and metering (center_weighted, spot, matrix) modes can also be included. This needs to
+       # be a tuple of 1 to 3 strings (ae_mode, ae_constraint_mode, ae_metering_mode)
+       # auto_exposure: ('normal')
+
+       # (Optional) Sets the white balance mode used by the camera. Options are 'none',
+       # 'auto', 'tungsten', 'fluorescent', 'indoor', 'daylight', and 'cloudy'. If 'none'
+       # is used white balancing is disabled, otherwise white balancing is enabled with 
+       # the mode selected as long as color gain is not used. Auto white balancing is the
+       # default.
+       # white_balance_mode: 'auto'
+
+       # (Optional) Sets image brightness by setting to a value between -1 and 1.
+       # 0 is the default setting if not provided here. 
+       # brightness: 0
+
+       # (Optional) Set the image R and B color gains and disable auto white balancing (AWB).
+       # Color gain is input as (R, B) with values between 0 to 32. AWB is the default if not
+       # provided here and disabled with the AWB settings.
+       # color_gain: (0, 0)
+
+       # (Opitional) Sets image contrast by setting to a value between 0 and 32.
+       # 1 is the default setting if not provided here.
+       # contrast: 1
+
+       # (Optional) Sets the sensor area (x, y, w, h) used to crop and scale 
+       # an image. Can be used to achieve digital pan and zoom. Default is 
+       # no crop.
+       # crop: (0, 0, 1, 1)
+
+       # (Optional) Sets the fames per second (fps) that the camera will provide.
+       # The limits of this setting are determined by the camera and camera mode,
+       # and the setting should be more than the trigger rate. Unlike trigger rate, 
+       # this setting does not determine how many frames per second the acquisition 
+       # software will save. 
+       # fps: 10
+
+       # (Optional) Sets the noise reduction mode that the camear will use. Options
+       # are 'off', 'fast', and 'highquality'. The default is highquality if only 
+       # stills are being saved and fast if video is saved. 
+       # noise_reduction_mode: highquality
+
+       # (Optional) Sets image saturation by setting to a value between 0 and 32.
+       # 1 is the default setting if not provided here.
+       # saturation: 1
+
+
+       # (Optional) Sets image sharpness by setting to a value between 0 and 16.
+       # 1 is the default setting if not provided here.
+       # sharpness: 1
+
 
     #  Here are some examples of camera specific settings. The settings in this
     #  section only apply to the camera specified. Parameters that aren't specified
     #  here will be set to their default values.
-
-    Chameleon3 CM3-U3-50S5M_16306616:
+   Chameleon3 CM3-U3-50S5M_16306616:
         #  We'll set gain, exposure, and the label here. All other parameters for
         #  this camera will be set to their default value.
         gain: 18

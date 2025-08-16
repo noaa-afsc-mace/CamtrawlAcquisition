@@ -1,0 +1,116 @@
+# SimpleAcquisition.yml
+#
+# For more info about the sections and various parameters see
+# SimpleAcquisition_Example.yml.
+#
+
+#  specify metadata elements common to all deployments for a cruise/survey. This information
+#  (and more) is stored in the deployments table in the metadata database.
+metadata:
+    vessel_name:
+    survey_name: Example Survey
+    camera_name: picam
+    survey_description:
+
+application:
+
+    output_mode: separate
+    output_path: /home/noaa-ce/Pictures/camtrawl
+    database_name: CamtrawlMetadata.db3
+    log_level: INFO
+    shut_down_on_exit:  False
+    ffmpeg_path: /usr/bin
+
+acquisition:
+
+    trigger_rate: 15
+    trigger_limit: -1
+
+    video_log_frames: False
+    video_sync_data_divider: 15
+    still_sync_data_divider: 1
+
+
+server:
+
+    start_server: True
+    server_interface: 0.0.0.0
+    server_port: 7889
+
+
+sensors:
+
+    default_type: synchronous
+    synchronous_timeout: 5
+
+    installed_sensors:
+
+cameras:
+
+#  Starting with acquisition version 4.3, multiple camera drivers are supported. The default
+#  driver is SpinCamera. If you want to use a different driver, you specify it using the
+#  'driver' keyword. Currently there are two drivers supported:
+#
+#    SpinCamera - Uses the Flir Spinnaker SDK and PySpin Python bindings to control Flir
+#                       machine vision cameras. These must be installed to use this driver.
+#    CV2VideoCamera - Uses the OpenCV VideoCapture class. This is a fairly generic interface
+#                       that supports a wide array of devices thru a crazy number of backends.
+#                       The specific backends available to you depend on how your OpenCV
+#                       was compiled and not all of the configuration options are supported
+#                       by all backend + camera combinations. Also, the valid inputs to
+#                       the supported options will be different for different backend + camera
+#                       combinations.
+#    PiCamera - Uses the picamera2 library to control RaspberryPi cameras and other 3rd-party
+#                       cameras that are supported by RaspberryPi.
+#
+#  Since these drivers have different interfaces and offer different levels of control, not
+#  all configuration options are going to be applicable to all camera + driver combinations.
+
+#  #  This is an example of using the CV2VideoCamera driver to capture images.
+#    Webcam_1:
+#        label: webcam
+#        trigger_divider: 1
+#        driver:  CV2VideoCamera
+#        cv2_cam_backend: DSHOW   # (Windows preferred)
+#        cv2_cam_backend: V4L2      # (Linux preferred)
+#        cv2_cam_path: 1
+#        cv2_cam_width: 1280
+#        cv2_cam_height: 720
+#
+#      #  gain may or may not be supported depending on the back end CV2VideoCapture is
+#      #  using and your specific camera. If your camera doesn't support gain it will be ignored.
+#        gain: 1
+#
+#      #  the CV2VideoCamera driver exposure value is configured using the 'exposure' keyword
+#      #  (which is different from the SpinCamera 'exposure_us' keyword.). The valid range and units
+#      #  are specific to the back end CV2VideoCapture uses and your camera.
+#      #  Valid exposure values for the Microsoft LifeCam HD-3000 are -11 to 1
+#        exposure:  -5
+#
+#
+#        rotation:  None
+#
+#        save_stills: True
+#        still_image_extension: .jpg
+#        still_image_divider: 15
+#        jpeg_quality: 85
+#        image_scale: 100
+#
+#        save_video: True
+#        video_preset: x264-fast
+    Pi_camera:
+         label: picam
+         trigger_divider: 1
+         driver: PiCamera
+         pi_cam_path: 0
+         pi_mode: 2
+         rotation: flipud
+         still_image_extension: .jpg
+         still_image_divider: 15
+#        jpeg_quality: 85
+#        image_scale: 100
+         save_video: False
+#        video_preset: x264-fast
+        
+
+
