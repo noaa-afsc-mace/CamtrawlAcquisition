@@ -92,7 +92,9 @@ class AcquisitionBase(QtCore.QObject):
                              'video_preset': 'default',
                              'video_force_framerate': -1,
                              'video_frame_divider': 1,
-                             'video_scale': 100}
+                             'video_scale': 100,
+                             'cam_path': 0,
+                             'cam_mode':-1}
 
     #  DEFAULT_VIDEO_PROFILE defines the default options for the 'default' video profile.
     DEFAULT_VIDEO_PROFILE = {'encoder':'libx265',
@@ -106,7 +108,7 @@ class AcquisitionBase(QtCore.QObject):
     #  VALID_DRIVERS contains the names of camera drivers available to the system.
     #  If a camera specifies a different driver than one listed here, it will be
     #  ignored. Driver names should be entered in lower case.
-    VALID_DRIVERS = ['spincamera', 'cv2videocamera']
+    VALID_DRIVERS = ['spincamera', 'cv2videocamera', 'picamera']
 
     #  specify the maximum number of times the application will attempt to open a
     #  metadata db file when running in combined mode and the original db file
@@ -493,8 +495,6 @@ class AcquisitionBase(QtCore.QObject):
                     QtCore.QCoreApplication.instance().quit()
                     return
 
-
-
             elif driver == 'cv2videocamera':
                 self.logger.info("At least one camera is configured to use the " +
                         "CV2VideoCamera driver. Importing CV2VideoCamera...")
@@ -503,6 +503,18 @@ class AcquisitionBase(QtCore.QObject):
                 except:
                     #  if we can't import this driver we bail
                     self.logger.critical("Error importing CV2VideoCamera!")
+                    self.logger.critical("Application exiting...")
+                    QtCore.QCoreApplication.instance().quit()
+                    return
+                
+            elif driver == 'picamera':
+                self.logger.info("At least one camera is configured to use the " +
+                        "PiCamera driver. Importing PiCamera...")
+                try:
+                    import_module('PiCamera')
+                except:
+                    #  if we can't import this driver we bail
+                    self.logger.critical("Error importing PiCamera!")
                     self.logger.critical("Application exiting...")
                     QtCore.QCoreApplication.instance().quit()
                     return
@@ -842,6 +854,91 @@ class AcquisitionBase(QtCore.QObject):
                         self.logger.warning("    This camera will be ignored.")
                         continue
 
+                elif config['driver'].lower() == 'picamera':
+                    if 'pi_cam_path' in config:  
+                        cam_path = config['pi_cam_path']
+                    if 'pi_mode' in config:
+                        cam_mode = config['pi_mode']
+                    if 'pi_resolution' in config:
+                        resolution = config['pi_resolution']
+                    else:
+                        resolution = (-1, -1)        
+                    if 'exposure_us' in config:
+                        this_exposure = config['exposure_us']
+                    else:
+                        this_exposure = None
+
+                    try:
+                        sc = PiCamera.PiCamera(cam_path, cam_mode, resolution)
+                        # TODO: add 'auto_foucs':
+                        if 'auto_exposure' in config:
+                            if len(config['auto_exposure'])==1:
+                                if sc.set_auto_exposure(config['auto_exposure'][0]):
+                                    self.logger.info('    %s: auto exposure set to %s' %
+                                        (sc.camera_name, config['auto_exposure'][0]))
+                            elif len(config['auto_exposure'])==2:
+                                if sc.set_auto_exposure(config['auto_exposure'][0],
+                                    constraint=config['auto_exposure'][1]):
+                                    self.logger.info('    %s: auto exposure set to %s, %s' %
+                                        (sc.camera_name, config['auto_exposure'][0],
+                                         config['auto_exposure'][1]))                               
+                            elif len(config['auto_exposure'])==3 and config['auto_exposure'][1]=='none':
+                                if sc.set_auto_exposure(config['auto_exposure'][0],
+                                    metering=config['auto_exposure'][2]):
+                                    self.logger.info('    %s: auto exposure set to %s, %s' %
+                                        (sc.camera_name, config['auto_exposure'][0],
+                                         config['auto_exposure'][2]))                                         
+                            elif len(config['auto_exposure'])==3:
+                                if sc.set_auto_exposure(config['auto_exposure'][0],
+                                    constraint=config['auto_exposure'][1],
+                                    metering=config['auto_exposure'][2]):
+                                    self.logger.info('    %s: auto exposure set to %s, %s, %s' %
+                                        (sc.camera_name, config['auto_exposure'][0],
+                                         config['auto_exposure'][1], config['auto_exposure'][2])) 
+                        if 'white_balance_mode' in config:
+                            if sc.set_white_balance(config['white_balance_mode']):
+                                self.logger.info('    %s: white balance set to %s' %
+                                    (sc.camera_name, config['white_balance_mode']))
+                        if 'brightness' in config:
+                            if sc.set_brightness(config['brightness']):
+                                self.logger.info('    %s: brightness set to %i' %
+                                    (sc.camera_name, config['brightness']))
+                        if 'color_gain' in config:
+                            if sc.set_color_gain(config['color_gain']):
+                                self.logger.info('    %s: color gain set to (%i, %i)' %
+                                    (sc.camera_name, config['color_gain'][0],
+                                     config['color_gain'][1]))
+                        if 'contrast' in config:
+                            if sc.set_contrast(config['contrast']):
+                                self.logger.info('    %s: contrast set to %i' %
+                                    (sc.camera_name, config['contrast']))
+                        if 'crop' in config:
+                            if sc.set_crop(config['crop']):
+                                self.logger.info('    %s: crop set to %i, %i, %i, %i' %
+                                    (sc.camera_name, config['crop'][0], config['crop'][1],
+                                     config['crop'][2], config['crop'][3]))
+                        if 'fps' in config:
+                            if sc.set_fps(config['fps']):
+                                self.logger.info('    %s: fps set to %i' %
+                                    (sc.camera_name, config['fps']))
+                        if 'noise_reduction_mode' in config:
+                            if sc.set_noise_reduction(config['noise_reduction_mode']):
+                                self.logger.info('    %s: noise reduction set to %s' %
+                                    (sc.camera_name, config['noise_reduction_mode']))     
+                        if 'saturation' in config:
+                            if sc.set_saturation(config['saturation']):
+                                self.logger.info('    %s: saturation set to %i' %
+                                    (sc.camera_name, config['saturation']))
+                        if 'sharpness' in config:
+                            if sc.set_sharpness(config['sharpness']):
+                                self.logger.info('    %s: sharpness set to %i' %
+                                    (sc.camera_name, config['sharpness']))
+                    except Exception as e:
+                        self.logger.warning("    Unable to instantiate driver for camera '" + cam + "'")
+                        self.logger.warning("    Error: " + str(e))
+                        self.logger.warning("    This camera will be ignored.")
+                        continue
+                    
                 #  set up the options for saving image data
                 image_options = {'file_ext':config['still_image_extension'],
                                  'jpeg_quality':config['jpeg_quality'],
@@ -933,9 +1030,8 @@ class AcquisitionBase(QtCore.QObject):
                     sc.set_exposure(this_exposure)
                 sc.set_gain(config['gain'])
                 sc.rotation = config['rotation']
-                self.logger.info('    %s: label: %s  gain: %d  exposure_us: %d  rotation:%s' %
-                        (sc.camera_name, config['label'], sc.get_gain(), sc.get_exposure(),
-                        config['rotation']))
+                self.logger.info(f""""    {sc.camera_name}: label: {config['label']}  gain: {sc.get_gain()}
+                exposure_us: {sc.get_exposure()}  rotation:{config['rotation']}""" )
 
                 #  set the sensor binning
                 sc.set_binning(config['sensor_binning'])
@@ -1176,10 +1272,11 @@ class AcquisitionBase(QtCore.QObject):
                             image_data['exposure'], image_data['gain'], image_data['save_still'],
                             image_data['save_frame'])
 
-            log_str = (cam_name + ': Image Acquired: %dx%d  exp: %d  gain: %2.1f  filename: %s' %
-                    (image_data['width'], image_data['height'], image_data['exposure'],
-                    image_data['gain'], filename))
-        self.logger.debug(log_str)
+#             log_str = (cam_name + ': Image Acquired: %dx%d  exp: %d  gain: %2.1f  filename: %s' %
+#                     (image_data['width'], image_data['height'], image_data['exposure'],
+#                     image_data['gain'], filename))
+            log_str = (f"""{cam_name}: Image Acquired: {image_data['width']}x{image_data['height']}
+                        exp: {image_data['exposure']}  gain: {image_data['gain']}  filename: {filename}""")
 
 
     @QtCore.pyqtSlot(object, bool)
