@@ -32,6 +32,7 @@
 """
 
 import os
+import sys
 import datetime
 import shlex
 import subprocess as sp
@@ -54,6 +55,11 @@ class ImageWriter(QtCore.QObject):
 
     '''
 
+
+    #  only certain Jetson modules support hardware encoding - this list contains module names
+    #  (as presented in /proc/device-tree/model) that are known to not support hardware encoding.
+    SOFTWARE_ONLY_MODULES = ['Orin Nano']
+
     VIDEO_SUPPORTED_EXT = ['.avi', '.mp4', '.mpeg4', '.mkv']
 
     # specify the common video options. These are options that are explicitly
@@ -62,11 +68,13 @@ class ImageWriter(QtCore.QObject):
     VIDEO_COMMON_OPTIONS = ['encoder', 'framerate', 'pixel_format', 'max_frames_per_file',
             'scale', 'file_ext', 'ffmpeg_path', 'ffmpeg_debug_out']
 
+
     #  define PyQt Signals
     writeComplete = QtCore.pyqtSignal(str, str)
     writerStopped = QtCore.pyqtSignal(str)
     videoFileClosed = QtCore.pyqtSignal(str,str, int, int, datetime.datetime, datetime.datetime)
     error = QtCore.pyqtSignal(str, str)
+
 
     def __init__(self, camera_name, parent=None):
 
@@ -79,6 +87,7 @@ class ImageWriter(QtCore.QObject):
         self.ffmpeg_out = None
         self.filename = ''
         self.save_video = False
+        self.using_ffmpeg = False
         self.this_video_start_frame = 0
         self.this_video_start_time = None
         self.video_options = {'encoder':'libx265',
@@ -92,6 +101,20 @@ class ImageWriter(QtCore.QObject):
         self.image_options = {'file_ext':'.jpg',
                               'jpeg_quality':90,
                               'scale':100}
+        
+        #  if we're running on linux, check if we're running on a platform known
+        #  to not have hardware encoding support
+        if sys.platform == 'linux':
+            try:
+                with open('/proc/device-tree/model', 'r') as f:
+                    model = f.read().strip().lower()
+                    for module in self.SOFTWARE_ONLY_MODULES:
+                        if module.lower() in model:
+                            self.use_hardware_encoder = False
+                        else:
+                            self.use_hardware_encoder = True
+            except:
+                self.use_hardware_encoder = True
 
 
     @QtCore.pyqtSlot(str, dict)
@@ -181,21 +204,25 @@ class ImageWriter(QtCore.QObject):
                         self.video_options['file_ext'] = '.' + self.video_options['file_ext']
                     filename = image_data['filename'] + self.video_options['file_ext']
 
-                    self.StartRecording(filename, scaled_image.shape[1],
-                            scaled_image.shape[0], image_data['image_number'])
+                    self.StartRecording(filename, scaled_image.shape[1], scaled_image.shape[0],
+                            image_data['image_number'], image_data['data'].ndim)
             else:
                 #  we don't have a file open, start a new file
                 if self.video_options['file_ext'][0] != '.':
                     self.video_options['file_ext'] = '.' + self.video_options['file_ext']
                 filename = image_data['filename'] + self.video_options['file_ext']
 
-                self.StartRecording(filename, scaled_image.shape[1],
-                            scaled_image.shape[0], image_data['image_number'])
+                self.StartRecording(filename, scaled_image.shape[1], scaled_image.shape[0],
+                        image_data['image_number'], image_data['data'].ndim)
 
             #  add this frame
             try:
-                # pass the image data to ffmpeg
-                self.ffmpeg_process.stdin.write(scaled_image.tobytes())
+                if self.using_ffmpeg:
+                    # pass the image data to ffmpeg
+                    self.ffmpeg_process.stdin.write(scaled_image.tobytes())
+                else:
+                    #  we're using cv2.ImageWriter+gstreamer
+                    self.cv_videowriter.write(scaled_image)
 
                 # increase the video frame counter
                 self.frame_number = self.frame_number + 1
@@ -212,7 +239,7 @@ class ImageWriter(QtCore.QObject):
 
 
     @QtCore.pyqtSlot(str, int, int, int)
-    def StartRecording(self, filename, width, height, image_number):
+    def StartRecording(self, filename, width, height, image_number, image_dims):
 
         #  Set our start video metadata params
         self.this_video_start_number = image_number
@@ -222,50 +249,96 @@ class ImageWriter(QtCore.QObject):
             #  first close the old file before starting a new one
             self.StopRecording()
 
-        try:
+        try:            
+            #  if we're running on linux, we will first try to use opencv + gstreamer 
+            #  since it has a better chance of supporting hardware encoding on Jetson
+            if sys.platform == 'linux' and not self.using_ffmpeg:
+                #  create the gstreamer pipeline
+                if self.use_hardware_encoder == True:
+                    #  hardware encoding *may* be supported so we'll at least try...
+                    gst_pipeline = (f'appsrc ! queue ! videoconvert ! video/x-raw,format=BGRx ! nvvidconv ! '
+                            f'nvv4l2h264enc ! video/x-h264,format=byte-stream ! h264parse ! matroskamux ! '
+                            f'filesink location="{filename}"')
+                    print("TRYING HARDWARE ENCODER")
+                else:
+                    #  we know hardware encoding isn't supported on this platform so use software
+                    gst_pipeline = (f'appsrc ! queue ! videoconvert ! video/x-raw,format=BGRx ! nvvidconv ! '
+                            f'x264enc tune=zerolatency speed-preset=superfast bitrate=2048 sliced-threads=true !'
+                            f'video/x-h264,format=byte-stream ! h264parse ! matroskamux ! '
+                            f'filesink location="{filename}"')
+                
+                if image_dims == 1:
+                    #  mono image
+                    is_color = False
+                else:
+                    is_color = True
 
-            #  generate the base ffmpeg command string
-            command_string = (f'ffmpeg -y -s {width}x{height} -pixel_format bgr24 ' +
-                    f'-f rawvideo -r {self.video_options["framerate"]} -i pipe: -c:v ' +
-                    f'{self.video_options["encoder"]}  ')
+                #  create an instance of videowriter using the gstreamer backend
+                self.cv_videowriter = cv2.VideoWriter(gst_pipeline, cv2.CAP_GSTREAMER,
+                        self.video_options["framerate"], (width, height), is_color)
 
-            #  insert the codec specific options
-            for option, value in self.video_options.items():
-                if option not in self.VIDEO_COMMON_OPTIONS:
-                    command_string += f'-{option} {value} '
-
-            #  add the pixel format
-            command_string += f'-pix_fmt {self.video_options["pixel_format"]} '
-
-            #  and end with the output file name
-            command_string += "'" + filename + "'"
-
-            #  parse the command line args and add the
-            command_args = shlex.split(command_string)
-
-            if self.video_options["ffmpeg_path"] in [None, '']:
-                #  no path passed, we're using whatever is on the system path
-                command_args[0] = command_args[0]
+                #  check if we succeeded
+                if self.cv_videowriter.isOpened() == True:
+                    #  yes - set using_ffmpeg to false
+                    self.using_ffmpeg = False
+                else:
+                    #  There was an issue creating the videowriter - emit an error signal
+                    #  and set using_ffmpeg to True
+                    self.error.emit(self.camera_name, 'Start Recording Warning: Unable to initialize GStreamer pipeline. ' +
+                            'Falling back to ffmpeg...')
+                    self.using_ffmpeg = True
+                    
             else:
-                #  we've been passed a path so we need to add the separator
-                command_args[0] = self.video_options["ffmpeg_path"] + os.sep + command_args[0]
+                #  On non-linux systems, we use ffmpeg for encoding
+                self.using_ffmpeg = True
 
-            if self.video_options["ffmpeg_debug_out"]:
-                out_filename = os.path.splitext(filename)[0] + '_debug.txt'
-                self.ffmpeg_out = open(out_filename, 'w')
-                self.ffmpeg_out.write(command_string)
-                self.ffmpeg_process = sp.Popen(command_args, stdin=sp.PIPE, stderr=self.ffmpeg_out)
-            else:
-                #  send output to NULL
-                self.ffmpeg_out = None
-                #  On windows, sending to DEVNULL seems to eventually cause the ffmpeg process to
-                #  hang. So here we'll try to write to a more portable devnull
-                if os.name == 'nt':
-                    self.ffmpeg_out = open(os.devnull, 'w')
+
+            if self.using_ffmpeg:
+                #  either we failed using cv2+gstreamer or we're running on Windows/OSX and
+                #  only use ffmpeg for encoding.
+
+                #  generate the base ffmpeg command string
+                command_string = (f'ffmpeg -y -s {width}x{height} -pixel_format bgr24 ' +
+                        f'-f rawvideo -r {self.video_options["framerate"]} -i pipe: -c:v ' +
+                        f'{self.video_options["encoder"]}  ')
+
+                #  insert the codec specific options
+                for option, value in self.video_options.items():
+                    if option not in self.VIDEO_COMMON_OPTIONS:
+                        command_string += f'-{option} {value} '
+
+                #  add the pixel format
+                command_string += f'-pix_fmt {self.video_options["pixel_format"]} '
+
+                #  and end with the output file name
+                command_string += "'" + filename + "'"
+
+                #  parse the command line args and add the
+                command_args = shlex.split(command_string)
+
+                if self.video_options["ffmpeg_path"] in [None, '']:
+                    #  no path passed, we're using whatever is on the system path
+                    command_args[0] = command_args[0]
+                else:
+                    #  we've been passed a path so we need to add the separator
+                    command_args[0] = self.video_options["ffmpeg_path"] + os.sep + command_args[0]
+
+                if self.video_options["ffmpeg_debug_out"]:
+                    out_filename = os.path.splitext(filename)[0] + '_debug.txt'
+                    self.ffmpeg_out = open(out_filename, 'w')
+                    self.ffmpeg_out.write(command_string)
                     self.ffmpeg_process = sp.Popen(command_args, stdin=sp.PIPE, stderr=self.ffmpeg_out)
                 else:
-                    #  on linux, this seems to work perfectly fine so we'll not change it
-                    self.ffmpeg_process = sp.Popen(command_args, stdin=sp.PIPE, stderr=sp.DEVNULL)
+                    #  send output to NULL
+                    self.ffmpeg_out = None
+                    #  On windows, sending to DEVNULL seems to eventually cause the ffmpeg process to
+                    #  hang. So here we'll try to write to a more portable devnull
+                    if os.name == 'nt':
+                        self.ffmpeg_out = open(os.devnull, 'w')
+                        self.ffmpeg_process = sp.Popen(command_args, stdin=sp.PIPE, stderr=self.ffmpeg_out)
+                    else:
+                        #  on linux, this seems to work perfectly fine so we'll not change it
+                        self.ffmpeg_process = sp.Popen(command_args, stdin=sp.PIPE, stderr=sp.DEVNULL)
 
             #  reset the frame counter and set the recording state
             self.frame_number = 0
@@ -294,18 +367,24 @@ class ImageWriter(QtCore.QObject):
 
         if (self.is_recording):
             try:
+                if self.using_ffmpeg:
+                    #  shut down the ffmpeg process
 
-                if self.ffmpeg_process:
-                    # Close and flush stdin
-                    self.ffmpeg_process.stdin.close()
-                    # Wait for sub-process to finish
-                    self.ffmpeg_process.wait()
-                    # Terminate the sub-process
-                    self.ffmpeg_process.terminate()
+                    if self.ffmpeg_process:
+                        # Close and flush stdin
+                        self.ffmpeg_process.stdin.close()
+                        # Wait for sub-process to finish
+                        self.ffmpeg_process.wait()
+                        # Terminate the sub-process
+                        self.ffmpeg_process.terminate()
 
-                if self.ffmpeg_out:
-                    #  close the ffmpeg debug stream if open
-                    self.ffmpeg_out.close()
+                    if self.ffmpeg_out:
+                        #  close the ffmpeg debug stream if open
+                        self.ffmpeg_out.close()
+                        
+                else:
+                    #  we're using cv2.VideoWriter + gstreamer
+                    self.cv_videowriter.release()
 
                 #  emit the videoFileClosed signal
                 self.videoFileClosed.emit(self.camera_name, self.filename,
@@ -314,6 +393,7 @@ class ImageWriter(QtCore.QObject):
 
                 self.ffmpeg_process = None
                 self.ffmpeg_out = None
+                self.cv_videowriter = None
                 self.frame_number = 0
                 self.filename = ''
                 self.is_recording = False

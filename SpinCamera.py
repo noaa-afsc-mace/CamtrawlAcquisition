@@ -350,8 +350,7 @@ class SpinCamera(QtCore.QObject):
         #  if we're running in auto exposure mode, update the exposure value to
         #  ensure that this instance is in sync with the camera.
         if self.auto_exposure:
-            self.exposure = self.cam.ExposureTime.GetValue()
-            #print(self.exposure)
+            self.exposure = int(round(self.cam.ExposureTime.GetValue()))
 
         #  check if we should trigger because of the divider
         if (self.total_triggers % self.trigger_divider) != 0:
@@ -502,6 +501,11 @@ class SpinCamera(QtCore.QObject):
 
         if self.trig_timestamp is None:
             return
+
+
+        #  check if we're 
+        #if not (self.save_this_still or self.save_this_frame):
+
 
         #  get the index this event is associated with
         idx = self.n_triggered - 1
@@ -725,33 +729,34 @@ class SpinCamera(QtCore.QObject):
             #  Turn triggering off
             self.cam.TriggerMode.SetValue(PySpin.TriggerMode_Off)
 
-            #  Set the trigger source to FrameStart
-            self.cam.TriggerSource.SetValue(PySpin.TriggerSelector_FrameStart)
+            #  Set the trigger selector to FrameStart
+            self.cam.TriggerSelector.SetValue(PySpin.TriggerSelector_FrameStart)
 
-            #  Set the trigger edge to activate on
-            if edge.lower() == 'falling':
-                #  Set the trigger to the falling edge
-                self.cam.TriggerActivation.SetValue(PySpin.TriggerActivation_FallingEdge)
-            else:
-                #  Set the trigger to the rising edge
-                self.cam.TriggerActivation.SetValue(PySpin.TriggerActivation_RisingEdge)
-
+            #  set the trigger source and trigger edge (if applicable)
             if mode.lower() in ['hardware', 'software']:
+                #  set the trigger source
                 if mode.lower() == 'software':
                     self.trigger_mode = PySpin.TriggerSource_Software
+                    self.cam.TriggerSource.SetValue(self.trigger_mode)
                 else:
                     self.trigger_mode = source
+                    self.cam.TriggerSource.SetValue(self.trigger_mode)
 
-                #  set the trigger mode
-                self.cam.TriggerSource.SetValue(self.trigger_mode)
+                    #  and set the trigger edge if we're hardware triggering
+                    if edge.lower() == 'falling':
+                        #  Set the trigger to the falling edge
+                        self.cam.TriggerActivation.SetValue(PySpin.TriggerActivation_FallingEdge)
+                    else:
+                        #  Set the trigger to the rising edge
+                        self.cam.TriggerActivation.SetValue(PySpin.TriggerActivation_RisingEdge)
 
                 #  and enable triggering
                 self.cam.TriggerMode.SetValue(PySpin.TriggerMode_On)
+                print("Trig mode on")
             else:
                 #  disable triggering
                 self.cam.TriggerMode.SetValue(PySpin.TriggerMode_Off)
                 self.trigger_mode = None
-
 
         except PySpin.SpinnakerException as ex:
             self.error.emit(self.camera_name, 'Error: %s' % ex)
@@ -844,6 +849,99 @@ class SpinCamera(QtCore.QObject):
         return binning
 
 
+    def set_auto_gain_bounds(self, auto_gain_min, auto_gain_max, nodemap=None):
+
+        if nodemap is None:
+            nodemap = self.cam.GetNodeMap()
+
+        #  get the auto gain nodes
+        try:
+            #  older cameras use the AutoGain... feature name
+            gain_lower_node = PySpin.CFloatPtr(nodemap.GetNode("AutoGainLowerLimit"))
+            gain_upper_node = PySpin.CFloatPtr(nodemap.GetNode("AutoGainUpperLimit"))
+            gain_lower_node.GetMin()
+        except:
+            #  newer "S" cameras use the AutoExposureGain... feature name
+            gain_lower_node = PySpin.CFloatPtr(nodemap.GetNode("AutoExposureGainLowerLimit"))
+            gain_upper_node = PySpin.CFloatPtr(nodemap.GetNode("AutoExposureGainUpperLimit"))
+
+        #  get the current gain mode so we can set the camera back
+        current_gain_mode = self.cam.GainAuto.GetValue()
+        
+        #  clamp the provided min/max values to the camera's min/max
+        min_to_set = max(gain_lower_node.GetMin(), auto_gain_min)
+        min_to_set = min(gain_lower_node.GetMax(), min_to_set)
+        max_to_set = max(gain_upper_node.GetMin(), auto_gain_max)
+        max_to_set = min(gain_upper_node.GetMax(), max_to_set)
+        if max_to_set < min_to_set:
+            max_to_set = min_to_set
+        
+        #  now set the camera into auto gain mode to allow editing of bounds
+        self.cam.GainAuto.SetValue(PySpin.GainAuto_Continuous)
+
+        #  set the bounds
+        gain_lower_node.SetValue(min_to_set)
+        gain_upper_node.SetValue(max_to_set)
+
+        #  restore the gain mode
+        self.cam.GainAuto.SetValue(current_gain_mode)
+
+        #  get the (hopefully) updated values to return to the caller
+        auto_gain_min = gain_lower_node.GetValue()
+        auto_gain_max = gain_upper_node.GetValue()
+
+        return auto_gain_min, auto_gain_max
+
+
+    def set_auto_exposure_bounds(self, auto_exposure_min, auto_exposure_max, nodemap=None):
+        '''
+        set_auto_exposure_bounds will set the lower and upper exposure bounds for the camera's
+        auto exposure algorithm. The values provided will be clamped to the camera's allowed
+        min/max values.
+        '''
+
+        if nodemap is None:
+            nodemap = self.cam.GetNodeMap()
+
+        #  get the auto exposure time nodes
+        try:
+            #  older cameras use the AutoExposureTime... feature name
+            exp_lower_node = PySpin.CFloatPtr(nodemap.GetNode("AutoExposureTimeLowerLimit"))
+            exp_upper_node = PySpin.CFloatPtr(nodemap.GetNode("AutoExposureTimeUpperLimit"))
+            exp_lower_node.GetMin()
+        except:
+            #  newer "S" cameras use the AutoExposureExposureTime... feature name
+            exp_lower_node = PySpin.CFloatPtr(nodemap.GetNode("AutoExposureExposureTimeLowerLimit"))
+            exp_upper_node = PySpin.CFloatPtr(nodemap.GetNode("AutoExposureExposureTimeUpperLimit"))
+
+        #  get the current exposure mode so we can set the camera back
+        current_exposure_mode = self.cam.ExposureAuto.GetValue()
+        
+        #  clamp the provided min/max values to the camera's min/max
+        min_to_set = max(exp_lower_node.GetMin(), auto_exposure_min)
+        min_to_set = min(exp_lower_node.GetMax(), min_to_set)
+        max_to_set = max(exp_upper_node.GetMin(), auto_exposure_max)
+        max_to_set = min(exp_upper_node.GetMax(), max_to_set)
+        if max_to_set < min_to_set:
+            max_to_set = min_to_set
+
+        #  now set the camera into auto exposure mode to allow editing of bounds
+        self.cam.ExposureAuto.SetValue(PySpin.ExposureAuto_Continuous)
+
+        #  set the bounds
+        exp_lower_node.SetValue(float(min_to_set))
+        exp_upper_node.SetValue(float(max_to_set))
+        
+        #  restore the exposure mode
+        self.cam.ExposureAuto.SetValue(current_exposure_mode)
+
+        #  get the updated values to return to the caller
+        auto_exp_min = exp_lower_node.GetValue()
+        auto_exp_max = exp_upper_node.GetValue()
+        
+        return auto_exp_min, auto_exp_max
+
+
     def set_exposure(self, exposure_us, nodemap=None):
 
         result = True
@@ -869,8 +967,14 @@ class SpinCamera(QtCore.QObject):
                 if nodemap is None:
                     nodemap = self.cam.GetNodeMap()
 
-                auto_exp_min = PySpin.CFloatPtr(nodemap.GetNode("AutoExposureTimeLowerLimit")).GetValue()
-                auto_exp_max = PySpin.CFloatPtr(nodemap.GetNode("AutoExposureTimeUpperLimit")).GetValue()
+                try:
+                    #  older cameras use the AutoExposureTime... feature name
+                    auto_exp_min = PySpin.CFloatPtr(nodemap.GetNode("AutoExposureTimeLowerLimit")).GetValue()
+                    auto_exp_max = PySpin.CFloatPtr(nodemap.GetNode("AutoExposureTimeUpperLimit")).GetValue()
+                except:
+                    #  newer "S" cameras use the AutoExposureExposureTime... feature name
+                    auto_exp_min = PySpin.CFloatPtr(nodemap.GetNode("AutoExposureExposureTimeLowerLimit")).GetValue()
+                    auto_exp_max = PySpin.CFloatPtr(nodemap.GetNode("AutoExposureExposureTimeUpperLimit")).GetValue()
                 exposure_time_to_set = self.cam.ExposureTime.GetValue()
 
                 #  clamp exposure value if necessary
@@ -992,7 +1096,7 @@ class SpinCamera(QtCore.QObject):
             converted_image = raw_image.Convert(self.ND_pixelFormat, self.raw_conversion)
 
         #  populate the return dict
-        image_data['data'] = converted_image.GetNDArray().copy()
+        image_data['data'] = converted_image.GetNDArray()#.copy()
         image_data['ok'] = True
         image_data['exposure'] = round(chunk_data.GetExposureTime())
         image_data['gain'] = round(chunk_data.GetGain(), 2)
@@ -1248,33 +1352,50 @@ class SpinCamera(QtCore.QObject):
             self.acquisitionStopped.emit(self, self.camera_name, False)
 
 
-    def set_white_balance(self):
+    def set_white_balance(self, mode, red_balance_ratio=1.25, blue_balance_ratio=3.25,
+            auto_mode='indoor', nodemap=None):
+        '''set_white_balance sets the white balance of the camera
+        
+            mode can be "manual" or "auto"
+
+        'BalanceRatioSelector_Blue', 'BalanceRatioSelector_Red', 'BalanceWhiteAutoProfile_Indoor',
+        'BalanceWhiteAutoProfile_Outdoor', 'BalanceWhiteAuto_Continuous', 'BalanceWhiteAuto_Off',
+        'BalanceWhiteAuto_Once'
+
         '''
-        https://www.flir.com/support-center/iis/machine-vision/knowledge-base/achieving-greater-color-balance-across-multiple-cameras/
-        https://www.flir.com/support-center/iis/machine-vision/knowledge-base/controlling-the-white-balance-of-your-camera/
-        https://www.flir.com/support-center/iis/machine-vision/application-note/using-white-balance-with-blackfly-s-and-spinnaker/
+        
+        if nodemap is None:
+            nodemap = self.cam.GetNodeMap()
+        
+        #  check if the balance ratio node is writable
+        ratio_node = nodemap.GetNode('BalanceRatio')
+        if not self.check_node_accessibility(ratio_node):
+            #  this must be a mono camera
+            return False
+        
+        
+        if mode.lower() == 'manual':
+            self.cam.BalanceWhiteAuto.SetValue(PySpin.BalanceWhiteAuto_Off)
+            
+            ratio_node = PySpin.CFloatPtr(nodemap.GetNode("BalanceRatio"))
+            
+            self.cam.BalanceRatioSelector.SetValue(PySpin.BalanceRatioSelector_Blue)
+            ratio_node.SetValue(blue_balance_ratio)
+            self.cam.BalanceRatioSelector.SetValue(PySpin.BalanceRatioSelector_Red)
+            ratio_node.SetValue(red_balance_ratio)
+            
+        else:
+            #  if not manual, then we will set white balance to continuous auto mode
+            self.cam.BalanceWhiteAuto.SetValue(PySpin.BalanceWhiteAuto_Continuous)
+            
+            #  set the profile
+            if auto_mode.lower() == 'indoor':
+                self.cam.BalanceWhiteAutoProfile.SetValue(PySpin.BalanceWhiteAutoProfile_Indoor)
+            else:
+                self.cam.BalanceWhiteAutoProfile.SetValue(PySpin.BalanceWhiteAutoProfile_Outdoor)
 
-        The white balancing coefficients can then be written as below:
-
-        a = G / R   b = G / B
-
-        The coefficients can then be calculated by using the average color channel values.
-
-        Navigate to the Settings tab.
-        Turn off Balance White Auto.
-        Select the appropriate Balance Ratio Selector and change the value in Balance Ratio.
-        Selecting Red in the Balance Ratio changes a and selecting Blue changes b.
-
-        // Retrieve nodes for manually adjusting white balance settings.
-        CEnumerationPtr ptrBalanceWhiteAuto = nodeMap.GetNode("BalanceWhiteAuto");
-        CEnumEntryPtr ptrBalanceWhiteAutoOff = ptrBalanceWhiteAuto->GetEntryByName("Off");
-        ptrBalanceWhiteAuto->SetIntValue(ptrBalanceWhiteAutoOff->GetValue());
-        CEnumerationPtr ptrBalanceRatioSelector = nodeMap.GetNode("BalanceRatioSelector");
-        CEnumEntryPtr ptrBalanceRatioSelectorRed = ptrBalanceRatioSelector->GetEntryByName("Red");
-        ptrBalanceRatioSelector->SetIntValue(ptrBalanceRatioSelectorRed->GetValue());
-        CFloatPtr ptrBalanceRatio = nodeMap.GetNode("BalanceRatio");
-        ptrBalanceRatio->SetValue(1.5);
-        '''
+        return True
+        
 
     def __sync_settings(self, nodemap=None):
         '''__sync_settings will trigger the camera a few times to push settings into the

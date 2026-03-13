@@ -36,16 +36,35 @@ import os
 import sys
 import argparse
 import collections
+import subprocess
+import shlex
+import logging
+from logging.handlers import RotatingFileHandler
 import yaml
 from PyQt5 import QtCore
 import CamtrawlController
 
+#  THIS SCRIPT MUST BE RUN AS ROOT
 
 class CamtrawlStartup(QtCore.QObject):
 
-    WIN_SYNC_SCRIPT = 'C:\\camtrawl\\scripts\\sync_time.bat'
-    LINUX_SYNC_SCRIPT = '/camtrawl/scripts/sync_time.sh'
-    CONTROLLER_TIMEOUT = 1500
+    #  define the names of the scripts used to 
+    WIN_SYNC_SCRIPT = 'sync_time.bat'
+    LINUX_SYNC_SCRIPT = 'sync_time.sh'
+    LINUX_GUI_SCRIPT = 'start_desktop.sh'
+    LINUX_CAMTRAWL_SCRIPT = 'run_camtrawl.sh'
+    
+    #  specify if the system is running headless. Headless systems
+    #  do not have a screen and do not support remote desktop. Because
+    #  of this, they will not start the desktop environment when in
+    #  maintenance mode and the acquisition software is *always*
+    #  started as a service from this script.
+    HEADLESS = True
+    
+    #  specify the timeout for communicating with the controller
+    #  If the controller doesn't respond within this time it is
+    #  assumed that it is not working/available.
+    CONTROLLER_TIMEOUT = 2000
 
     def __init__(self, config_file=None, parent=None):
 
@@ -64,11 +83,8 @@ class CamtrawlStartup(QtCore.QObject):
         #  create the default configuration dict. These values are used for application
         #  configuration if they are not provided in the config file.
         self.configuration = {}
-        self.configuration['application'] = {}
         self.configuration['controller'] = {}
         self.configuration['system'] = {}
-
-        self.configuration['application']['log_level'] = 'INFO'
 
         self.configuration['controller']['use_controller'] = True
         self.configuration['controller']['serial_port'] = '/dev/ttySAC0'
@@ -77,22 +93,25 @@ class CamtrawlStartup(QtCore.QObject):
         self.configuration['system']['ntp_sync_clock_at_boot'] = False
         self.configuration['system']['ntp_sync_while_deployed'] = False
         self.configuration['system']['ntp_server_address'] = '192.168.0.99'
-
+        self.configuration['system']['ntp_server_retries'] = 10
         self.configuration['system']['wifi_disable_while_deployed'] = False
+        self.configuration['system']['start_desktop_while_deployed'] = False
+        self.configuration['system']['scripts_path'] = '/camtrawl/scripts'
+        self.configuration['system']['startup_log_path'] = '/camtrawl/startup_logs'
 
-        #  continue the setup after QtCore.QCoreApplication.exec_() is called
-        #  by using a timer to call StartSetup. This ensures that the
-        #  application event loop is running as we continue setup.
+        #  continue the setup after QtCore.QCoreApplication.exec_() is called and
+        #  the event loop is running.
         startTimer = QtCore.QTimer(self)
-        startTimer.timeout.connect(self.StartSetup)
+        startTimer.timeout.connect(self.StartStartup)
         startTimer.setSingleShot(True)
         startTimer.start(0)
 
 
-    def StartSetup(self):
-        '''StartSetup reads the configuration file then connects to the controller
-        (if configured), requests the system state, and then sets up the computer
-        based on the state.
+    def StartStartup(self):
+        '''StartStartup reads the configuration file then connects to the controller
+        (if configured) and requests the system state. Startup then continues in
+        FishishStartup one the system state is know. If the controller is not installed,
+        or it does not respond, the system will boot into maintenance mode.
         '''
 
         #  read the configuration file - we start with the default values and
@@ -100,10 +119,35 @@ class CamtrawlStartup(QtCore.QObject):
         #  ReadConfig method.
         self.configuration = self.ReadConfig(self.config_file, self.configuration)
 
+        #  get the scripts and logging paths
+        self.scripts_path = os.path.normpath(self.configuration['system']['scripts_path']) + os.sep
+        self.log_file = (os.path.normpath(self.configuration['system']['startup_log_path']) +
+                os.sep + 'CamtrawlStartup.log')
+
+        #  set up logging
+        try:
+            #  create the logger
+            self.logger = logging.getLogger('AcquisitionStartup')
+            self.logger.propagate = False
+            self.logger.setLevel(self.configuration['application']['log_level'])
+            fileHandler = RotatingFileHandler(self.log_file, mode='a', maxBytes=1*1024*1024, 
+                    backupCount=1, encoding=None, delay=0)
+            formatter = logging.Formatter('%(asctime)s : %(levelname)s - %(message)s')
+            fileHandler.setFormatter(formatter)
+            self.logger.addHandler(fileHandler)
+        except:
+            #  we failed to open the log file - try to keep going...
+            print("CRITICAL ERROR: Unable to create log file " + self.log_file)
+            self.logger = None
+
         #  if we're using the controller, start it
         if self.configuration['controller']['use_controller']:
 
             #  create an instance of CamtrawlController
+            if self.logger:
+                self.logger.info('Starting camtrawl controller - port: ' +
+                        self.configuration['controller']['serial_port'] + '    baud: ' +
+                        str(self.configuration['controller']['baud_rate']))
             self.controller = CamtrawlController.CamtrawlController(serial_port=
                     self.configuration['controller']['serial_port'], baud=
                     self.configuration['controller']['baud_rate'])
@@ -112,10 +156,7 @@ class CamtrawlStartup(QtCore.QObject):
             self.controller.systemState.connect(self.ControllerStateChanged)
             self.controller.controllerStopped.connect(self.ControllerStopped)
 
-            #  and start the controller object - we set the controllerStarting
-            #  attribute so we know if we receive an error signal from the
-            #  controller we know that the controller serial port could not be opened.
-            self.controllerStarting = True
+            #  and start the controller object
             self.controllerCurrentState = 0
             self.controller.startController()
 
@@ -128,61 +169,104 @@ class CamtrawlStartup(QtCore.QObject):
         else:
             #  if we're not using the controller, we just start the pc as if
             #  we were in maintenance mode.
-            self.controller = None
             self.systemMode = 'maintenance'
 
-            #  we don't need to wait for the
-            self.finishSetup()
+            if self.logger:
+                self.logger.info('Controller not installed. Starting the' +
+                        'system in maintenance mode.')
+
+            #  we don't need to wait for the controller so we just finish up our
+            #  startup tasks.
+            self.finishStartup()
 
 
-    def finishSetup(self):
+    def finishStartup(self):
         '''
         finishSetup is called after we know the system state. Here we do the needed
         tasks based on the system state.
         '''
 
-        print("System is in " + self.systemMode + " mode")
+        if self.logger:
+            self.logger.info("System is in " + self.systemMode + " mode")
 
         if self.systemMode == 'maintenance':
             #  the system is in maintenance/download mode
 
             if self.configuration['system']['ntp_sync_clock_at_boot']:
-                #  sync the clock
+                #  sync the clock - we do  this via a script so we can control when
+                #  the sync happens. This way we ensure that the sync is at least
+                #  attempted before acquisition starts.
                 self.syncClock()
+            else:
+                if self.logger:
+                    self.logger.info('NTP clock sync is not enabled.')
 
-                #  depending on how the OS is configured, we can, for example
-                #  boot into console mode and start the desktop here.
+            #  if this is a non-windows platform we will start the GUI desktop
+            #  when in maintenance mode. If we're running on a headless system
+            #  we will just start acquisition.
+            if sys.platform != "win32":
+                if not self.HEADLESS:
+                    cmdString = self.scripts_path + self.LINUX_GUI_SCRIPT
+                    if self.logger:
+                        self.logger.info("Starting GUI desktop using command: " + cmdString)
+                    subprocess.Popen([cmdString])
+                    
+                    #  When in maintenance mode, CamtrawlAcquistion is started by the
+                    #  GUI desktop Startup Applications so nothing more needs to be
+                    #  done here.
+
+                else:
+                    #  we're running headless, we start acquisition via systemd since
+                    #  it will not be started by the desktop system (since there is
+                    #  no desktop system.)
+                    cmdString = 'systemctl start camtrawl_acquisition'
+                    if self.logger:
+                        self.logger.info('Starting acquistion using command: ' + cmdString)
+                    commands = shlex.split(cmdString)
+                    subprocess.run(commands)
 
         else:
             #  the system is in deployed mode
 
+            #  check if we're syncing the clock while deployed
             if (self.configuration['system']['ntp_sync_while_deployed'] and
                     self.configuration['system']['ntp_sync_clock_at_boot']):
                 #  sync the clock
                 self.syncClock()
+            else:
+                if self.logger:
+                    self.logger.info('NTP clock sync is not enabled when the system is deployed.')
 
-            #  This is where we would disable WiFi
+            #  Check if we're disabling WiFi/Bluetooth
             if self.configuration['system']['wifi_disable_while_deployed']:
                 self.disableWiFi()
+            else:
+                if self.logger:
+                    self.logger.info('WiFi will not be disabled during deployment.')
 
-        #  Currently the linux image always boots into desktop mode. When it
-        #  boots into desktop mode CamtrawlAcquisition is started by the desktop
-        #  system (gnome or whatever it is) so we don't have to start it here.
-        #  If we change that so the system boots into console mode, we would need
-        #  to start acquisition here.
+            #  if this is a non-windows platform we will start acquisition here
+            if sys.platform != "win32":
+                cmdString = 'systemctl start camtrawl_acquisition'
+                if self.logger:
+                    self.logger.info('Starting acquistion using command: ' + cmdString)
+                commands = shlex.split(cmdString)
+                subprocess.run(commands)
 
         #  we're done here
-        self.exitStartup()
+        if self.logger:
+            self.logger.info("CamtrawlStartup complete. Exiting.")
+            logging.shutdown()
+        QtCore.QCoreApplication.instance().quit()
 
 
     @QtCore.pyqtSlot()
     def ControllerStopped(self):
         '''
         ControllerStopped is called when the controller is done cleaning up.
-        Here we just exit after it is done.
         '''
-        QtCore.QCoreApplication.instance().quit()
-
+        #  now that the controller has stopped, finish our startup tasks
+        self.finishStartup()
+        
 
     def disableWiFi(self):
         '''
@@ -197,7 +281,10 @@ class CamtrawlStartup(QtCore.QObject):
 
         #  execute rfkill
         if (cmdString):
-            os.system(cmdString)
+            if self.logger:
+                self.logger.info("Disabling WiFi using command: " + cmdString)
+            commands = shlex.split(cmdString)
+            subprocess.run(commands)
 
 
     def syncClock(self):
@@ -206,18 +293,27 @@ class CamtrawlStartup(QtCore.QObject):
         '''
 
         if sys.platform == "win32":
-            cmdString = (self.WIN_SYNC_SCRIPT + ' ' +
+            cmdString = (self.scripts_path + self.WIN_SYNC_SCRIPT + ' ' +
                     self.configuration['system']['ntp_server_address'])
         else:
-            #  when this is changed to use subprocess remove the '&' argument
-            cmdString = (self.LINUX_SYNC_SCRIPT + ' ' +
-                        self.configuration['system']['ntp_server_address'] + ' &')
+            cmdString = (self.scripts_path + self.LINUX_SYNC_SCRIPT + ' ' +
+                    str(self.configuration['system']['ntp_server_retries']) +
+                    ' ' + self.configuration['system']['ntp_server_address'])
 
-        # TODO: This needs to be changed to use subprocess.popen instead of os.system
-        #       so windows sync will not block.
-
+        if self.logger:
+            self.logger.info("Syncing clock with command: " + cmdString)
+                
         #  run the time sync script
-        os.system(cmdString)
+        commands = shlex.split(cmdString)
+        result = subprocess.run(commands)
+        if result.returncode == 0:
+            if self.logger:
+                self.logger.info("Clock synced to NTP server at " + 
+                        self.configuration['system']['ntp_server_address'])
+        else:
+            if self.logger:
+                self.logger.info("FAILED Clock sync! NTP server: " + 
+                        self.configuration['system']['ntp_server_address'])
 
 
     @QtCore.pyqtSlot()
@@ -227,11 +323,16 @@ class CamtrawlStartup(QtCore.QObject):
         but it doesn't respond. When this happens we just assume the system is
         in maintenance/download mode.
         '''
-
+        
+        if self.logger:
+            self.logger.info("Failed to connect to CamtrawlController. " +
+                    "Assuming system is in maintenance mode.")
+        
+        #  if we can't connect to the controller - we assume we're in maintenance mode.
         self.systemMode = 'maintenance'
 
-        #  finish what we need to do
-        self.finishSetup()
+        #  stop the controller (probably isn't started but just in case...)
+        self.controller.stopController()
 
 
     @QtCore.pyqtSlot(int)
@@ -240,36 +341,20 @@ class CamtrawlStartup(QtCore.QObject):
         the ControllerStateChanged slot is called when the Camtrawl controller emits
         a state change message. If we never connect, the timeout timer will expire.
         '''
+        
+        #  stop the timeout timer
+        self.timeoutTimer.stop()
 
-        #  For this script we only care about the initial state
-        if self.controllerStarting:
-            self.controllerStarting = False
-
-            #  stop the timeout timer
-            self.timeoutTimer.stop()
-
-            #  check our state
-            if (new_state == self.controller.AT_DEPTH):
-                #  the system is at depth aka "deployed"
-                self.systemMode = 'deployed'
-            else:
-                #  The system is in some other state
-                self.systemMode = 'maintenance'
-
-            #  finish what we need to do
-            self.finishSetup()
-
-
-    def exitStartup(self):
-        '''
-
-        '''
-        #  stop the controller
-        if self.controller:
-            self.controller.stopController()
+        #  check our state
+        if (new_state == self.controller.AT_DEPTH):
+            #  the system is at depth aka "deployed"
+            self.systemMode = 'deployed'
         else:
-            #  we're done
-            QtCore.QCoreApplication.instance().quit()
+            #  The system is in some other state
+            self.systemMode = 'maintenance'
+
+        #  stop the controller
+        self.controller.stopController()
 
 
     def ReadConfig(self, config_file, config_dict):
@@ -307,55 +392,8 @@ class CamtrawlStartup(QtCore.QObject):
             return d
 
 
-def exitHandler(a,b=None):
-    '''
-    exitHandler is called when CTRL-c is pressed on Windows
-    '''
-    global ctrlc_pressed
-
-    if not ctrlc_pressed:
-        #  make sure we only act on the first ctrl-c press
-        ctrlc_pressed = True
-        print("CTRL-C detected. Shutting down...")
-        acquisition.exitStartup()
-
-    return True
-
-
-def signal_handler(*args):
-    '''
-    signal_handler is called when ctrl-c is pressed when the python console
-    has focus. On Linux this is also called when the terminal window is closed
-    or when the Python process gets the SIGTERM signal.
-    '''
-    global ctrlc_pressed
-
-    if not ctrlc_pressed:
-        #  make sure we only act on the first ctrl-c press
-        ctrlc_pressed = True
-        print("CTRL-C or SIGTERM/SIGHUP detected. Shutting down...")
-        acquisition.exitStartup()
-
-    return True
-
 
 if __name__ == "__main__":
-
-    #  create a state variable to track if the user typed ctrl-c to exit
-    ctrlc_pressed = False
-
-    #  Set up the handlers to trap ctrl-c
-    if sys.platform == "win32":
-        #  On Windows, we use win32api.SetConsoleCtrlHandler to catch ctrl-c
-        import win32api
-        win32api.SetConsoleCtrlHandler(exitHandler, True)
-    else:
-        #  On linux we can use signal to get not only ctrl-c, but
-        #  termination and hangup signals also.
-        import signal
-        signal.signal(signal.SIGINT, signal_handler)
-        signal.signal(signal.SIGTERM, signal_handler)
-        signal.signal(signal.SIGHUP, signal_handler)
 
     #  set the default application config file path
     config_file = "./CamtrawlAcquisition.yml"
@@ -368,9 +406,9 @@ if __name__ == "__main__":
     if (args.config_file):
         config_file = os.path.normpath(str(args.config_file))
 
-    #  create an instance of QCoreApplication and and instance of the acquisition application
+    #  create an instance of QCoreApplication and and instance of the startup application
     app = QtCore.QCoreApplication(sys.argv)
-    acquisition = CamtrawlStartup(config_file=config_file, parent=app)
+    startup = CamtrawlStartup(config_file=config_file, parent=app)
 
     #  and start the event loop
     sys.exit(app.exec_())

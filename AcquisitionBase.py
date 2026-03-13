@@ -65,7 +65,15 @@ class AcquisitionBase(QtCore.QObject):
     # CAMERA_CONFIG_OPTIONS defines the default camera configuration options.
     # These values are used if not specified in the configuration file.
     CAMERA_CONFIG_OPTIONS = {'exposure_us':4000,
+                             'auto_exposure_min_us': 250,
+                             'auto_exposure_max_us': 200000,
                              'gain':18,
+                             'auto_gain_min': 0,
+                             'auto_gain_max': 100,
+                             'white_balance_mode': 'manual',
+                             'white_balance_preset': 'outdoor',
+                             'white_balance_ratio_red': 1.25,
+                             'white_balance_ratio_blue': 3.25,
                              'driver': 'SpinCamera',
                              'label':'Camera',
                              'rotation':'none',
@@ -188,6 +196,7 @@ class AcquisitionBase(QtCore.QObject):
         self.configuration['cameras'] = {}
         self.configuration['server'] = {}
         self.configuration['sensors'] = {}
+        self.configuration['system'] = {}
 
         self.configuration['application']['output_mode'] = 'separate'
         self.configuration['application']['output_path'] = './data'
@@ -216,6 +225,8 @@ class AcquisitionBase(QtCore.QObject):
         self.configuration['sensors']['asynchronous'] = []
         self.configuration['sensors']['synchronous_timeout_secs'] = 5
         self.configuration['sensors']['installed_sensors'] = {}
+
+        self.configuration['system']['scripts_path'] = '/camtrawl/scripts'
 
         self.configuration['metadata']['vessel_name'] = ''
         self.configuration['metadata']['survey_name'] = ''
@@ -403,7 +414,10 @@ class AcquisitionBase(QtCore.QObject):
         self.logger.info("Enumerating cameras...")
         self.enumerated_cameras = []
         drivers = []
-        configured_cams = list(self.configuration['cameras'].keys())
+        if self.configuration['cameras']:
+            configured_cams = list(self.configuration['cameras'].keys())
+        else:
+            configured_cams = []
         for camera in configured_cams:
             #  check if the driver parameter exists (it may not since the default
             #  camera configuration values have not been merged yet so if it isn't
@@ -598,10 +612,10 @@ class AcquisitionBase(QtCore.QObject):
                 #  key so we know if it is synced or not when we log it.
                 if 'type' in self.configuration['sensors']['installed_sensors'][sensor_name]:
                     if (self.configuration['sensors']['installed_sensors'][sensor_name]['type'].lower() in
-                            ['synced', 'sync', 'synchronous']):
-                        self.configuration['sensors']['installed_sensors'][sensor_name]['is_synchronous'] = True
-                    else:
+                            ['async', 'asynchronous']):
                         self.configuration['sensors']['installed_sensors'][sensor_name]['is_synchronous'] = False
+                    else:
+                        self.configuration['sensors']['installed_sensors'][sensor_name]['is_synchronous'] = True
                 else:
                     #  type was not provided so we use the default
                     self.configuration['sensors']['installed_sensors'][sensor_name]['is_synchronous'] = \
@@ -933,9 +947,32 @@ class AcquisitionBase(QtCore.QObject):
                     sc.set_exposure(this_exposure)
                 sc.set_gain(config['gain'])
                 sc.rotation = config['rotation']
-                self.logger.info('    %s: label: %s  gain: %d  exposure_us: %d  rotation:%s' %
+                self.logger.info('    %s: label: %s  gain: %d  exposure_us: %d  rotation: %s' %
                         (sc.camera_name, config['label'], sc.get_gain(), sc.get_exposure(),
                         config['rotation']))
+                if this_exposure < 0:
+                    #  set the auto exposure bounds
+                    exp_min, exp_max = sc.set_auto_exposure_bounds(config['auto_exposure_min_us'],
+                            config['auto_exposure_max_us'])
+                    self.logger.info('    %s: Auto-exposure enabled. min_exposure_us: %d  max_exposure_us: %d' %
+                        (sc.camera_name, exp_min, exp_max))
+                if config['gain'] < 0:
+                    #  set the gain exposure bounds
+                    gain_min, gain_max = sc.set_auto_gain_bounds(config['auto_gain_min'],
+                            config['auto_gain_max'])
+                    self.logger.info('    %s: Auto-gain enabled. min_gain: %d  max_gain: %d' %
+                        (sc.camera_name, gain_min, gain_max))
+
+                #  set the camera white balance
+                ok = sc.set_white_balance(config['white_balance_mode'], config['white_balance_ratio_red'],
+                    config['white_balance_ratio_blue'], config['white_balance_preset'])
+                if ok:
+                    if config['white_balance_mode'].lower() == 'manual':
+                        self.logger.info('    %s: Camera white balance set to manual. Red ratio %i  Blue ratio %i' %
+                                (sc.camera_name, config['white_balance_ratio_red'], config['white_balance_ratio_blue']))
+                    else:
+                        self.logger.info('    %s: Camera white balance set to auto using profile %s.' %
+                            (sc.camera_name,config['white_balance_preset']))
 
                 #  set the sensor binning
                 sc.set_binning(config['sensor_binning'])
@@ -1465,6 +1502,7 @@ class AcquisitionBase(QtCore.QObject):
 
             #  execute the "shutdown later" command
             if os.name == 'nt':
+                self.logger.info("    Executing windows shutdown: 'shutdown -s -t 10'")
                 #  on windows we can simply call shutdown and delay 10 seconds
                 subprocess.Popen(["shutdown", "-s", "-t", "10"],
                         creationflags=subprocess.DETACHED_PROCESS |
@@ -1477,11 +1515,18 @@ class AcquisitionBase(QtCore.QObject):
                 #  You must add an entry in the sudoers file to allow the user running this
                 #  application to execute the shutdown command without a password. For example
                 #  add these lines to your /etc/sudoers file:
-                #    camtrawl ALL=NOPASSWD: /camtrawl/software/scripts/delay_shutdown.sh
-                #    camtrawl ALL=NOPASSWD: /sbin/shutdown.sh
-                subprocess.Popen(['sudo', '/camtrawl/software/scripts/delay_shutdown.sh'],
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                        preexec_fn=os.setpgrp)
+                #    camtrawl ALL=(root) NOPASSWD:/sbin/shutdown
+                #    camtrawl ALL=(root) NOPASSWD:/sbin/reboot
+                #    camtrawl ALL=(root) NOPASSWD:/camtrawl/scripts/delay_shutdown.sh
+                scripts_path = os.path.normpath(self.configuration['system']['scripts_path'])
+                shutdown_script = scripts_path + os.sep + 'delay_shutdown.sh'
+                if shutil.which(shutdown_script):
+                    self.logger.info("    Executing linux shutdown script: " + shutdown_script)
+                    subprocess.Popen(['sudo', shutdown_script], stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL, preexec_fn=os.setpgrp)
+                else:
+                    self.logger.warning("    Error executing linux shutdown script: " + shutdown_script +
+                            ". Script not found or is not executable. System will not shut down!")
 
         self.logger.info("Acquisition Stopped.")
         self.logger.info("Application exiting...")
@@ -1895,7 +1940,10 @@ class AcquisitionBase(QtCore.QObject):
                 return
 
             #  determine if this data is synced or async
-            is_synchronous = self.default_is_synchronous
+            if 'is_synchronous' in self.configuration['sensors']['installed_sensors'][sensor_id]:
+                is_synchronous = self.configuration['sensors']['installed_sensors'][sensor_id]['is_synchronous']
+            else:
+                is_synchronous = self.default_is_synchronous
             if header in self.configuration['sensors']['synchronous']:
                 is_synchronous = True
             elif header in self.configuration['sensors']['asynchronous']:

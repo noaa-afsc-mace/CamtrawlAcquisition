@@ -12,15 +12,17 @@
 #  (and more) is stored in the deployments table in the metadata database and can be used
 #  to identify datasets collected on a specific survey or by a specific instrument.
 metadata:
-    vessel_name:
-    survey_name: Example Survey
+    vessel_name: Oscar Dyson
+    survey_name: DY202408
     camera_name: Camtrawl-1
-    survey_description:
+    survey_description: <Insert a short survey description here>
 
 
 #  specify some system options
 #
-#
+#  most of the system entries are used by the camtrawl_startup.py script that runs at boot
+#  and does some preflight setup like sycing the system clock and starting acquisition or
+#  the desktop environment depending on the system state.
 system:
 
     #  Set ntp_sync_clock_at_boot to attempt to sync the computer's clock to an NTP server
@@ -30,9 +32,9 @@ system:
     #  the NTP server is available to download images.
     ntp_sync_clock_at_boot: False
 
-    #  Set ntp_sync_while_deployed to True to have the system try to sync the clock while
-    #  in deployed mode. The default is False because it is assumed that a network
-    #  connection will not be available when the system is deployed.
+    #  Set ntp_sync_while_deployed to True sync the clock even when the system boots in
+    #  deployed mode. This may be desirable if the system is deployed with a network
+    #  connection.
     ntp_sync_while_deployed: False
 
     #  Set ntp_server_address to the network address of the NTP server to use for time sync.
@@ -49,6 +51,20 @@ system:
     #
     #  Currently this option is only available on Linux based systems.
     wifi_disable_while_deployed: False
+    
+    #  Specify the path to the supporting scripts. There are a few scripts that help
+    #  the Camtrawl system work. For example, the delay_shutdown.sh script is used on
+    #  linux systems to shut the system down after delaying 10 seconds. There are also
+    #  scripts for starting the desktop environment in linux, and for syncing the clock
+    #  in linux and Windows.
+    scripts_path: /camtrawl/scripts
+    
+    #  Set start_desktop_while_deployed to True to start the graphical desktop environment
+    #  (e.g. gdm3) even when the system is in "deployed" mode. Normally when the system is
+    #  deployed, itboots to a command prompt and the acquisition software runs as an
+    #  independent process. Setting this to True will always boot the system into the
+    #  graphical desktop and start acquistion in a terminal on the desktop.
+    start_desktop_while_deployed: False
 
 
 #  specify some general application settings

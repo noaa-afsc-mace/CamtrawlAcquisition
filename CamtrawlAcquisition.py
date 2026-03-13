@@ -78,6 +78,7 @@ class CamtrawlAcquisition(AcquisitionBase):
         self.configuration['controller']['serial_port'] = 'COM3'
         self.configuration['controller']['baud_rate'] = 921600
         self.configuration['controller']['strobe_pre_fire'] = 150
+        self.configuration['controller']['strobe_channel'] = 3
 
 
     def AcquisitionSetup2(self):

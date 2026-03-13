@@ -272,6 +272,11 @@ class CamtrawlServer(QtCore.QObject):
                 #  get this camera's image data
                 image_data = self.cameras[cam]['image_data']
 
+                #  make sure the image contains data
+                if image_data['data'] is None:
+                    #  no, move on
+                    continue
+
                 #  check if we're scaling the image
                 if (imgRequest.scale != 100):
                     #  we are scaling - compute the scaled width and height

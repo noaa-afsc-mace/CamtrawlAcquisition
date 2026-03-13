@@ -485,6 +485,22 @@ class CV2VideoCamera(QtCore.QObject):
         return True
 
 
+    def set_auto_gain_bounds(self, auto_gain_min, auto_gain_max, nodemap=None):
+        '''
+        set_auto_gain_bounds is not supported by VideoCapture but is required
+        for API compatibility.
+        '''
+        return 0,0
+
+
+    def set_auto_exposure_bounds(self, uto_exposure_min, auto_exposure_max, nodemap=None):
+        '''
+        set_auto_exposure_bounds is not supported by VideoCapture but is required
+        for API compatibility.
+        '''
+        return 0,0
+
+
     def get_image(self):
         '''get_image gets the next image from the camera buffers, does some error
         checking, converts the image, and then returns it.
