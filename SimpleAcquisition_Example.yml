@@ -16,7 +16,7 @@ metadata:
     vessel_name:
     survey_name: Example Survey
     camera_name: Camtrawl-1
-    survey_description:
+    survey_description: Insert Description Here
 
 
 #  specify some general application settings
@@ -83,6 +83,10 @@ application:
     #
     # Most linux systems have ffmpeg in their package repositories. Windows users can
     # download binaries from https://www.ffmpeg.org/download.html
+    #
+    # Note that on linux platforms, Gstreamer is the default encoder as it ships with
+    # hardware encoding support built in on Jetson systems.
+
 
     #  Windows users can download ffmpeg and unzip it in the ffmpeg folder in the
     #  CamtrawlAcquisition directory:
@@ -125,7 +129,7 @@ acquisition:
     # exiting. Set to -1 to trigger indefinitely. Note that the global trigger counter
     # is used when determining if the trigger limit has been met. Camera specific settings
     # may result in fewer images being recorded.
-    trigger_limit: 500
+    trigger_limit: -1
 
     #  set this to True to log the video frames in the metadata 'images' table. When writing
     #  videos at higher frame rates,
@@ -268,7 +272,7 @@ sensors:
 cameras:
 
     # The camera section is used to define which cameras should be used to acquire
-    # images and their settings. It is comprised
+    # images and their settings.
 
     # The acquisition application will first look for camera specific settings that
     # are in sections defined using the camera name and serial number (for example
@@ -287,19 +291,46 @@ cameras:
     # Starting with version 4.3, support for acquiring images using the OpenCV
     # VideoCapture class was added. This change required some additional configuration
     # parameters to be added. Also, because of the way VideoCapture works, many
-    # of the configuration settings below may not or will not work. This is an active
-    # area of development and the documentation may take some time to catch up.
+    # of the configuration settings below will not work.
 
     default:
-        # Specify the gain. Values are specific to the driver and camera you are using. It is
-        # your responsibility to set reasonable values. Setting gain is always supported
-        # when using the SpinCamera driver but may not be supported when using the
-        # CV2VideoCamera driver.
-        gain: 15
+        
+        # Specify the gain in dB. Set this to -1 to enable auto gain. Valid values
+        # depend on the driver and camera used. Value will be clamped to the camera's
+        # supported min/max values.
+        gain: 16
+        
+        # specify the minimum and maximum gain values if auto gain is enabled. Values
+        # will be clamped to the camera's supported min/max values. These values are
+        # ignored if auto gain is not enabled.
+        auto_gain_min: 0
+        auto_gain_max: 40
 
-        # Specify the exposure in microseconds - valid values depend on the camera used
-        exposure_us: 6000
+        # Specify the exposure in microseconds. Set to -1 to enable auto exposure.
+        exposure_us: 8000
+        
+        # specify the minimum and maximum exposure values if auto exposure is enabled. 
+        # Values will be clamped to the camera's supported min/max values. These entries
+        # are ignored if auto exposure is not enabled.
+        auto_exposure_min_us: 250
+        auto_exposure_max_us: 10000
 
+        # specify the white balance mode for color cameras. Set to 'auto' to enable automatic
+        # white balance and set to 'manual' to enable manual white balance. Auto white balance
+        # works best with a higher trigger rate (8-10 fps+). It is strongly recommended that
+        # manual white balance be used when trigger rates are lower since the camera will
+        # always be chasing the correct balance but will rarely achieve it.
+        white_balance_mode: auto
+        
+        # specify the color model used for auto white balance. Values are "indoor" and "outdoor"
+        white_balance_preset: indoor
+        
+        # specify the white balance ratios when the white balance mode is set to "manual".
+        # These values are ignored when using auto white balance. The default values of 1.25
+        # for red and 3.25 for blue are *ballpark* for underwater scenes with strobes in the
+        # 5000-6000K color range.
+        white_balance_ratio_red: 1.25
+        white_balance_ratio_blue: 3.25
         # Specify the camera label - this is written to the camera table in the metadata database
         # and can be used by downstream applications to help users identify the camera. For
         # example 'left' or 'right' for stereo systems.

@@ -13,7 +13,7 @@
 #  to identify datasets collected on a specific survey or by a specific instrument.
 metadata:
     vessel_name: Oscar Dyson
-    survey_name: DY202408
+    survey_name: DY2408
     camera_name: Camtrawl-1
     survey_description: <Insert a short survey description here>
 
@@ -61,9 +61,10 @@ system:
     
     #  Set start_desktop_while_deployed to True to start the graphical desktop environment
     #  (e.g. gdm3) even when the system is in "deployed" mode. Normally when the system is
-    #  deployed, itboots to a command prompt and the acquisition software runs as an
+    #  deployed, it boots to a command prompt and the acquisition software runs as an
     #  independent process. Setting this to True will always boot the system into the
     #  graphical desktop and start acquistion in a terminal on the desktop.
+    #  (Note: this has no effect on headless systems as they have no desktop installed.)
     start_desktop_while_deployed: False
 
 
@@ -106,7 +107,11 @@ application:
 
     #  specify the name of the SQLite metadata database file.
     database_name: CamtrawlMetadata.db3
-
+    #  specify the path to the calibration folder. If this folder exists, it will be copied into the
+    #  deployment data folder. It is intended to allow camera calibration files to follow the data
+    #  they are associated with. It is up to the user to calibrate their camera system and create
+    #  this folder and copy their calibration file(s) here. If this folder doesn't exist, nothing is done.
+    calibration_path: ./calibration                                                                                           
     # You can control the amount of info that is output to the log, also known as the log level.
     # This can be set, in increasing verboseness, to ERROR, WARNING, INFO, or DEBUG. Normally
     # you would set this to INFO.
@@ -131,12 +136,15 @@ application:
     #
     # Most linux systems have ffmpeg in their package repositories. Windows users can
     # download binaries from https://www.ffmpeg.org/download.html
+    #
+    # Note that on linux platforms, Gstreamer is the default encoder as it ships with
+    # hardware encoding support built in on Jetson systems.
 
     #  Windows users can download ffmpeg and unzip it in the ffmpeg folder in the
     #  CamtrawlAcquisition directory:
     ffmpeg_path: ./ffmpeg/bin
 
-    #  Linux users will most likely want to leave this empty.
+    #  Linux users will most likely want to leave this empty to use the system's ffmpeg
     #ffmpeg_path:
 
     #  Set disk_free_monitor to True to have the acquisition application periodically check
@@ -173,9 +181,28 @@ acquisition:
     # exiting. Set to -1 to trigger indefinitely. Note that the global trigger counter
     # is used when determining if the trigger limit has been met. Camera specific settings
     # may result in fewer images being recorded.
-    trigger_limit: 500
+    trigger_limit: -1
+#  set this to True to log the video frames in the metadata 'images' table. When writing
+    #  videos at higher frame rates,
+    video_log_frames: False
 
+    # Set the video_sync_data_divider to control when synchronous sensor data is written
+    # to the database when saving video files. Since video frame rates are usually greater
+    # than the rate you want to store "synchronous" data at, this divider can be used to
+    # slow the rate down. If you're recording at ~15 frames/sec, and this divider is set to
+    # 15, the system would log "synced" sensor data ~ once/second. This divider operates
+    # after the video_frame_divider and is global to all cameras so you may get unexpected
+    # results if you are recording video from multiple cameras that have different
+    # video_frame_divider values.
+    video_sync_data_divider: 15
 
+    # Set the still_sync_data_divider to control when synchronous sensor data is written
+    # to the database when saving still images. The default value is 1 and should only be
+    # changed if you really know what you are doing.  This divider operates after the
+    # save_image_divider and is global to all cameras so you may get unexpected
+    # results if you are saving stills from multiple cameras that have different
+    # save_image_divider values.
+    still_sync_data_divider: 1                                                                                            
 # The Camtrawl server provides a command and control interface and serves up image and
 # sensor data on the network. It can be used in conjunction with the Camtrawl client in
 # applications for remote viewing and control of the system.
@@ -219,6 +246,9 @@ controller:
     # strobe_channel=1 to trigger channel 1, set strobe_channel=2 to trigger channel 2
     # and set strobe_channel=3 to trigger both. The correct setting depends on how
     # your strobes are connected to the controller.
+    #
+    # Camtrawl controller v4 drops support for multiple channels and this setting
+    # will be ignored.
     strobe_channel: 3
 
 
@@ -273,9 +303,17 @@ sensors:
             # the type (specified above)
             #synced_headers: [$GPGGA]
             #async_headers: [$GPZDA]
+
+            #  Some sensors may output a number of unneeded datagrams. You can specify
+            #  specific datagrams to be ignored by adding them to the ingore_headers list.
+            #ignore_headers: [$GPGGA, $GPGLL, $GPGSV, $GPGSA, $GPVTG]
+
             #  Specify the serial port. This is passed directly to pySerial and can be a local
             #  serial port like "COM3" or "/dev/ttyUSB0" or "rfc2217://192.168.10.1:12345" or
             #   "socket://192.168.0.10:98765" See the pySerial documentation for more info.
+            #  You can now also specify a local UDP port to receive UDP based sensor data:
+            #  "udp://0.0.0.0:5432". Note that the IP address is ignored (only the port
+            #  is used) and you can only receive data on UDP ports.                                                
             #serial_port: COM4
             #  Specify the baud rate of this sensors serial port. I believe this would be ignored
             #  for network based ports.
@@ -325,11 +363,42 @@ cameras:
     # systems but it is included here to ensure that the the application can acquire
     # images with minimal initial configuration.
     default:
-        # Specify the gain in dB - valid values depend on the camera used
+        # Specify the gain in dB. Set this to -1 to enable auto gain. Valid values
+        # depend on the camera used. Value will be clamped to the camera's supported
+        # min/max values.
         gain: 16
+        
+        # specify the minimum and maximum gain values if auto gain is enabled. Values
+        # will be clamped to the camera's supported min/max values. These values are
+        # ignored if auto gain is not enabled.
+        auto_gain_min: 0
+        auto_gain_max: 40
 
-        # Specify the exposure in microseconds - valid values depend on the camera used
+        # Specify the exposure in microseconds. Set to -1 to enable auto exposure.
         exposure_us: 8000
+        
+        # specify the minimum and maximum exposure values if auto exposure is enabled. 
+        # Values will be clamped to the camera's supported min/max values. These entries
+        # are ignored if auto exposure is not enabled.
+        auto_exposure_min_us: 250
+        auto_exposure_max_us: 10000
+
+        # specify the white balance mode for color cameras. Set to 'auto' to enable automatic
+        # white balance and set to 'manual' to enable manual white balance. Auto white balance
+        # works best with a higher trigger rate (8-10 fps+). It is strongly recommended that
+        # manual white balance be used when trigger rates are lower since the camera will
+        # always be chasing the correct balance but will rarely achieve it.
+        white_balance_mode: auto
+        
+        # specify the color model used for auto white balance. Values are "indoor" and "outdoor"
+        white_balance_preset: indoor
+        
+        # specify the white balance ratios when the white balance mode is set to "manual".
+        # These values are ignored when using auto white balance. The default values of 1.25
+        # for red and 3.25 for blue are *ballpark* for underwater scenes with strobes in the
+        # 5000-6000K color range.
+        white_balance_ratio_red: 1.25
+        white_balance_ratio_blue: 3.25
 
         # Specify the camera label - this is written to the camera table in the metadata database
         # and can be used by downstream applications to help users identify the camera. For
@@ -374,7 +443,7 @@ cameras:
         # Specify the format the images are saved in. The supported formats will be those
         # supported by OpenCV on your platform. For Windows JPEG (.jpeg, .jpg, .jpe),
         # PNG (.png) and TIFF (.tiff, .tif) formats are always supported. It is possible
-        # that PEG 2000 (.jp2) is supported but this is untested. On Linux, OpenCV uses
+        # that JPEG 2000 (.jp2) is supported but this is untested. On Linux, OpenCV uses
         # the OS's image IO libraries so you may need to install them to get support for
         # a specific format.
         still_image_extension: .jpg
@@ -393,10 +462,10 @@ cameras:
         # a percent of the original size and the default value is 100 (unscaled).
         image_scale: 100
 
-        # (experimental) Specify if this camera should save video files.
+        # Specify if this camera should save video files.
         save_video: False
 
-        # (experimental) Specify the video "preset" defined in the VideoProfiles.yml that
+        # Specify the video "preset" defined in the VideoProfiles.yml that
         # will be used to set up the video encoder. Tuning parameters for various encoders
         # can be tricky, the idea is to define some known good configurations that can be
         # easily copied and further tuned for specific applications. See VideoProfiles.yml
@@ -407,7 +476,7 @@ cameras:
         # a percent of the original size and the default value is 100 (unscaled).
         video_scale:  100
 
-        # (experimental) Set video_force_framerate to override the framerate value passed to
+        # Set video_force_framerate to override the framerate value passed to
         # the video encoder. By default, the system acquisition rate is used but not all encoders
         # are happy with typical camera system acquisition rates so it can be changed here.
         # If this parameter is set to -1 or omitted, the system framerate will be used.
