@@ -256,8 +256,11 @@ class ImageWriter(QtCore.QObject):
                 #  create the gstreamer pipeline
                 if self.use_hardware_encoder == True:
                     #  hardware encoding *may* be supported so we'll at least try...
+                    #gst_pipeline = (f'appsrc ! queue ! videoconvert ! video/x-raw,format=BGRx ! nvvidconv ! '
+                    #        f'nvv4l2h264enc ! video/x-h264,format=byte-stream ! h264parse ! matroskamux ! '
+                    #        f'filesink location="{filename}"')
                     gst_pipeline = (f'appsrc ! queue ! videoconvert ! video/x-raw,format=BGRx ! nvvidconv ! '
-                            f'nvv4l2h264enc ! video/x-h264,format=byte-stream ! h264parse ! matroskamux ! '
+                            f'video/x-raw(memory:NVMM), format=NV12 ! nvv4l2h264enc ! h264parse  ! matroskamux ! '
                             f'filesink location="{filename}"')
                     print("TRYING HARDWARE ENCODER")
                 else:

@@ -52,6 +52,7 @@ class CamtrawlController(QtCore.QObject):
     sensorData = QtCore.pyqtSignal(str, str, datetime.datetime, str)
     parameterData = QtCore.pyqtSignal(str, str, datetime.datetime, dict)
     systemState = QtCore.pyqtSignal(int)
+    externalTrigger = QtCore.pyqtSignal()
     txSerialData = QtCore.pyqtSignal(str, str)
     error = QtCore.pyqtSignal(str,str)
     stopDevice = QtCore.pyqtSignal(list)
@@ -158,6 +159,7 @@ class CamtrawlController(QtCore.QObject):
         to indicate that the PC has booted and the acquisition software has
         successfully started.
         '''
+        # setting the PCState == 1 is 
         msg = "setPCState,1\n"
         self.txSerialData.emit(self.deviceParams['deviceName'], msg)
         self.logger.debug("CamtrawlController sent: " + msg)
@@ -411,6 +413,17 @@ class CamtrawlController(QtCore.QObject):
             # Convert the state to an int and emit the systemState signal
             state = int(dataBits[1])
             self.systemState.emit(state)
+
+        if header == "externalTrigger":
+            # Indicate that an external trigger has been detected
+            print("ExternTrigRX")
+            self.externalTrigger.emit()
+
+        elif header == "setPCState":
+            # Convert the state to an int
+            pcState = int(dataBits[1])
+            # currently we don't do anything with the PC system state on this side.
+            # it is primarily used by the controller to track the state of the PC.
 
         elif header.lower() == "getp2dparms":
             # getP2DParms,<mode as int>,<slope as float>,<intercept as float>,

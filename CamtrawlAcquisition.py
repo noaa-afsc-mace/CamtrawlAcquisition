@@ -178,6 +178,7 @@ class CamtrawlAcquisition(AcquisitionBase):
         self.controller.systemState.connect(self.ControllerStateChanged)
         self.controller.error.connect(self.ControllerError)
         self.controller.controllerStopped.connect(self.ControllerStopped)
+        self.controller.externalTrigger.connect(self.ExternalTriggerReceived)
 
         #  and start the controller object - we set the controllerStarting
         #  attribute so we know if we receive an error signal from the
@@ -186,6 +187,23 @@ class CamtrawlAcquisition(AcquisitionBase):
         self.controllerCurrentState = 0
         self.controller.startController()
 
+
+    @QtCore.pyqtSlot()
+    def ExternalTriggerReceived(self):
+        '''
+        ExternalTriggerReceived slot is called when the controller detects an external trigger
+        '''
+        # Ignore external triggers if we're not acquiring
+        print("ExternTrig1")
+        if self.isAcquiring:
+            # we're acquiring, but check if the trigger timer is already active so we don't
+            # keep stacking trigger events.
+            print("ExternTrig2")
+            if not self.triggerTimer.isActive():
+                # Trigger timer is not active so we'll immediately trigger
+                self.triggerTimer.start(0)
+                print("ExternTrig3")
+        
 
     @QtCore.pyqtSlot(str, str, datetime.datetime, dict)
     def ControllerParamData(self, sensor_id, header, rx_time, data):
