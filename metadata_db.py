@@ -3,7 +3,7 @@ metadata_db is a simple interface to the camtrawl metadata database.
 '''
 
 import os
-from PyQt5 import QtCore, QtSql
+from PySide6 import QtCore, QtSql
 
 
 class metadata_db(QtCore.QObject):

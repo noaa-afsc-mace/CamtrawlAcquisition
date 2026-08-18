@@ -27,7 +27,7 @@ import os
 import logging
 import datetime
 #import subprocess
-from PyQt5 import QtCore
+from PySide6 import QtCore
 import ImageWriter
 import numpy as np
 import cv2
@@ -35,17 +35,17 @@ import cv2
 
 class CV2VideoCamera(QtCore.QObject):
 
-    #  define PyQt Signals
-    imageData = QtCore.pyqtSignal(str, str, dict)
-    saveImage = QtCore.pyqtSignal(str, dict)
-    imageSaved = QtCore.pyqtSignal(object, str)
-    videoSaved = QtCore.pyqtSignal(str, str, int, int, datetime.datetime, datetime.datetime)
-    error = QtCore.pyqtSignal(str, str)
-    acquisitionStarted = QtCore.pyqtSignal(object, str, bool)
-    stoppingAcquisition = QtCore.pyqtSignal()
-    acquisitionStopped = QtCore.pyqtSignal(object, str, bool)
-    triggerReady = QtCore.pyqtSignal(object, list, bool)
-    triggerComplete = QtCore.pyqtSignal(object, bool)
+    #  define PySide Signals
+    imageData = QtCore.Signal(str, str, dict)
+    saveImage = QtCore.Signal(str, dict)
+    imageSaved = QtCore.Signal(object, str)
+    videoSaved = QtCore.Signal(str, str, int, int, datetime.datetime, datetime.datetime)
+    error = QtCore.Signal(str, str)
+    acquisitionStarted = QtCore.Signal(object, str, bool)
+    stoppingAcquisition = QtCore.Signal()
+    acquisitionStopped = QtCore.Signal(object, str, bool)
+    triggerReady = QtCore.Signal(object, list, bool)
+    triggerComplete = QtCore.Signal(object, bool)
 
 
     def __init__(self, cv_device_path, camera_name, resolution=(None, None), backend=None,
@@ -238,7 +238,7 @@ class CV2VideoCamera(QtCore.QObject):
         return True
 
 
-    @QtCore.pyqtSlot(list, int, datetime.datetime, bool, bool)
+    @QtCore.Slot(list, int, datetime.datetime, bool, bool)
     def trigger(self, cam_list, image_number, timestamp, save_image, emit_signal):
         '''trigger sets the camera up for the next trigger event and then either executes
         the software trigger or emits the triggerReady signal if using hardware triggering.
@@ -348,7 +348,7 @@ class CV2VideoCamera(QtCore.QObject):
         self.sw_trig_timer.start(0)
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def software_trigger(self):
         '''software_trigger is the slot called when the sw_trig_timer expires.
 
@@ -358,7 +358,7 @@ class CV2VideoCamera(QtCore.QObject):
         self.exposure_end('get image')
 
 
-    @QtCore.pyqtSlot(str)
+    @QtCore.Slot(str)
     def exposure_end(self, event_name):
         '''exposure_end is called when the camera calls the EndExposure event callback.
 
@@ -535,7 +535,7 @@ class CV2VideoCamera(QtCore.QObject):
         return True
 
 
-    @QtCore.pyqtSlot(list, str, bool, dict, bool, dict)
+    @QtCore.Slot(list, str, bool, dict, bool, dict)
     def start_acquisition(self, cam_list, file_path, save_images, image_options,
             save_video, video_options):
 
@@ -606,7 +606,7 @@ class CV2VideoCamera(QtCore.QObject):
             self.acquisitionStarted.emit(self, self.camera_name, False)
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def image_writer_stopped(self):
         '''The image_writer_stopped slot is called when the image_writer has
         been told to stop and it is finished shutting down (i.e. closing
@@ -620,7 +620,7 @@ class CV2VideoCamera(QtCore.QObject):
             self.acquisitionStopped.emit(self, self.camera_name, True)
 
 
-    @QtCore.pyqtSlot(str, str)
+    @QtCore.Slot(str, str)
     def image_write_complete(self, camera_name, filename):
         '''The image_write_complete slot is called when the image_writer has
        finished writing each image/frame.
@@ -630,7 +630,7 @@ class CV2VideoCamera(QtCore.QObject):
         self.imageSaved.emit(self, filename)
 
 
-    @QtCore.pyqtSlot(str, str)
+    @QtCore.Slot(str, str)
     def image_writer_error(self, camera_name, error_string):
         '''The image_write_complete slot is called when the image_writer has
        finished writing each image/frame.
@@ -640,7 +640,7 @@ class CV2VideoCamera(QtCore.QObject):
         self.error.emit(self.camera_name, error_string)
 
 
-    @QtCore.pyqtSlot(str, str, int, int, datetime.datetime, datetime.datetime)
+    @QtCore.Slot(str, str, int, int, datetime.datetime, datetime.datetime)
     def image_writer_video_closed(self, cam, filename, start_frame, end_frame, start_time, end_time):
         '''
         The image_writer_video_closed slot is called when the image_writer has
@@ -651,7 +651,7 @@ class CV2VideoCamera(QtCore.QObject):
         self.videoSaved.emit(cam, filename, start_frame, end_frame, start_time, end_time)
 
 
-    @QtCore.pyqtSlot(list)
+    @QtCore.Slot(list)
     def stop_acquisition(self, cam_list):
 
         #  check that we're supposed to stop

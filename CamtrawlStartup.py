@@ -41,7 +41,7 @@ import shlex
 import logging
 from logging.handlers import RotatingFileHandler
 import yaml
-from PyQt5 import QtCore
+from PySide6 import QtCore
 import CamtrawlController
 
 #  THIS SCRIPT MUST BE RUN AS ROOT
@@ -259,7 +259,7 @@ class CamtrawlStartup(QtCore.QObject):
         QtCore.QCoreApplication.instance().quit()
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def ControllerStopped(self):
         '''
         ControllerStopped is called when the controller is done cleaning up.
@@ -316,7 +316,7 @@ class CamtrawlStartup(QtCore.QObject):
                         self.configuration['system']['ntp_server_address'])
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def ControllerTimeout(self):
         '''
         ControllerTimeout is called when we're supposed to use the controller
@@ -335,7 +335,7 @@ class CamtrawlStartup(QtCore.QObject):
         self.controller.stopController()
 
 
-    @QtCore.pyqtSlot(int)
+    @QtCore.Slot(int)
     def ControllerStateChanged(self, new_state):
         '''
         the ControllerStateChanged slot is called when the Camtrawl controller emits

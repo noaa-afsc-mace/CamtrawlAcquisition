@@ -36,7 +36,7 @@
 
 
 import os
-from PyQt5 import QtCore
+from PySide6 import QtCore
 from AcquisitionBase import AcquisitionBase
 
 
@@ -84,7 +84,10 @@ def signal_handler(*args):
 
 
 if __name__ == "__main__":
+
     import sys
+    import signal
+    import win32api
     import argparse
 
     #  create a state variable to track if the user typed ctrl-c to exit
@@ -93,12 +96,10 @@ if __name__ == "__main__":
     #  Set up the handlers to trap ctrl-c
     if sys.platform == "win32":
         #  On Windows, we use win32api.SetConsoleCtrlHandler to catch ctrl-c
-        import win32api
         win32api.SetConsoleCtrlHandler(exitHandler, True)
     else:
         #  On linux we can use signal to get not only ctrl-c, but
         #  termination and hangup signals also.
-        import signal
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
         signal.signal(signal.SIGHUP, signal_handler)
@@ -124,4 +125,4 @@ if __name__ == "__main__":
             parent=app)
 
     #  and start the event loop
-    sys.exit(app.exec_())
+    sys.exit(app.exec())

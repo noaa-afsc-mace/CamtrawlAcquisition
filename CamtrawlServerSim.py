@@ -38,7 +38,7 @@
 
 
 
-from PyQt5 import QtCore
+from PySide6 import QtCore
 import logging
 import datetime
 import os
@@ -65,10 +65,10 @@ class CamtrawlServerSim(QtCore.QObject):
     '''
 
     #  define our signals
-    exShutdown = QtCore.pyqtSignal()
-    parameterChanged = QtCore.pyqtSignal(str, str, str, bool, str)
-    stopServer = QtCore.pyqtSignal()
-    newImageAvailable = QtCore.pyqtSignal(str, str, dict)
+    exShutdown = QtCore.Signal()
+    parameterChanged = QtCore.Signal(str, str, str, bool, str)
+    stopServer = QtCore.Signal()
+    newImageAvailable = QtCore.Signal(str, str, dict)
 
 
     def __init__(self, deploymentDir, localAddress, localPort,
@@ -119,7 +119,7 @@ class CamtrawlServerSim(QtCore.QObject):
         timer.start(0)
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def startServer(self):
 
         #  bump the prompt
@@ -203,7 +203,7 @@ class CamtrawlServerSim(QtCore.QObject):
         self.updateTimer.start(self.startDelay)
 
 
-    @QtCore.pyqtSlot(str)
+    @QtCore.Slot(str)
     def serverError(self, errorStr):
         '''
         slot called when the CamtrawlServer runs into a problem
@@ -214,20 +214,20 @@ class CamtrawlServerSim(QtCore.QObject):
     #  we only report receiving the following messages from the client. Implementing
     #  anything more is beyond the scope of this example
 
-    @QtCore.pyqtSlot(str, str, datetime.datetime, str)
+    @QtCore.Slot(str, str, datetime.datetime, str)
     def rxSensorData(self, id, header, timeObj, data):
         logging.info("Sensor data received from client: " + id + " ::: " + str(timeObj) + " ::: " + data)
 
-    @QtCore.pyqtSlot(str, str)
+    @QtCore.Slot(str, str)
     def rxGetParameterRequest(self, module, parameter):
         logging.info("GetParameterRequest received from client: " + module + " ::: " + parameter)
 
-    @QtCore.pyqtSlot(str, str, str)
+    @QtCore.Slot(str, str, str)
     def rxSetParameterRequest(self, module, parameter, value):
         logging.info("SetParameterRequest received from client: " + module + " ::: " + parameter + ":" + value)
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def updateImages(self):
         '''
         updateImages is called by the image update timer. It loads the next image
@@ -312,7 +312,7 @@ class CamtrawlServerSim(QtCore.QObject):
         self.updateTimer.start(timerInterval)
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def stopSimulator(self):
 
         #  stop the update timer
@@ -326,7 +326,7 @@ class CamtrawlServerSim(QtCore.QObject):
         self.stopServer.emit()
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def finishShutdown(self):
 
         #  if we've been told to shut down from an external signal, exit the application.

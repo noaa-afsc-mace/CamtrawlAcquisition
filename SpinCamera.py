@@ -31,7 +31,7 @@
 |       Rick Towler   <rick.towler@noaa.gov>
 """
 
-from PyQt5 import QtCore
+from PySide6 import QtCore
 import os
 import logging
 import datetime
@@ -87,17 +87,17 @@ class SpinCamera(QtCore.QObject):
     #  to ensure that the first triggered image has the expected settings.
     SETTINGS_LAG = 2
 
-    #  define PyQt Signals
-    imageData = QtCore.pyqtSignal(str, str, dict)
-    saveImage = QtCore.pyqtSignal(str, dict)
-    imageSaved = QtCore.pyqtSignal(object, str)
-    videoSaved = QtCore.pyqtSignal(str,str, int, int, datetime.datetime, datetime.datetime)
-    error = QtCore.pyqtSignal(str, str)
-    acquisitionStarted = QtCore.pyqtSignal(object, str, bool)
-    stoppingAcquisition = QtCore.pyqtSignal()
-    acquisitionStopped = QtCore.pyqtSignal(object, str, bool)
-    triggerReady = QtCore.pyqtSignal(object, int, bool)
-    triggerComplete = QtCore.pyqtSignal(object, bool)
+    #  define PySide Signals
+    imageData = QtCore.Signal(str, str, dict)
+    saveImage = QtCore.Signal(str, dict)
+    imageSaved = QtCore.Signal(object, str)
+    videoSaved = QtCore.Signal(str,str, int, int, datetime.datetime, datetime.datetime)
+    error = QtCore.Signal(str, str)
+    acquisitionStarted = QtCore.Signal(object, str, bool)
+    stoppingAcquisition = QtCore.Signal()
+    acquisitionStopped = QtCore.Signal(object, str, bool)
+    triggerReady = QtCore.Signal(object, int, bool)
+    triggerComplete = QtCore.Signal(object, bool)
 
 
     def __init__(self, spin_cam, parent=None):
@@ -309,7 +309,7 @@ class SpinCamera(QtCore.QObject):
         return True
 
 
-    @QtCore.pyqtSlot(list, int, datetime.datetime, bool, bool)
+    @QtCore.Slot(list, int, datetime.datetime, bool, bool)
     def trigger(self, cam_list, image_number, timestamp, save_image, emit_signal):
         '''trigger sets the camera up for the next trigger event and then either executes
         the software trigger or emits the triggerReady signal if using hardware triggering.
@@ -470,7 +470,7 @@ class SpinCamera(QtCore.QObject):
             self.triggerReady.emit(self, self.exposures[0], False)
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def software_trigger(self):
         '''software_trigger is the slot called when the sw_trig_timer expires.
 
@@ -480,7 +480,7 @@ class SpinCamera(QtCore.QObject):
         self.cam.TriggerSoftware.Execute()
 
 
-    @QtCore.pyqtSlot(str)
+    @QtCore.Slot(str)
     def exposure_end(self, event_name):
         '''exposure_end is called when the camera calls the EndExposure event callback.
 
@@ -1126,7 +1126,7 @@ class SpinCamera(QtCore.QObject):
         return True
 
 
-    @QtCore.pyqtSlot(list, str, bool, dict, bool, dict)
+    @QtCore.Slot(list, str, bool, dict, bool, dict)
     def start_acquisition(self, cam_list, file_path, save_images, image_options,
             save_video, video_options):
 
@@ -1282,7 +1282,7 @@ class SpinCamera(QtCore.QObject):
             self.acquisitionStarted.emit(self, self.camera_name, False)
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def image_writer_stopped(self):
         '''The image_writer_stopped slot is called when the image_writer has
         been told to stop and it is finished shutting down (i.e. closing
@@ -1296,7 +1296,7 @@ class SpinCamera(QtCore.QObject):
             self.acquisitionStopped.emit(self, self.camera_name, True)
 
 
-    @QtCore.pyqtSlot(str, str)
+    @QtCore.Slot(str, str)
     def image_write_complete(self, camera_name, filename):
         '''
         The image_write_complete slot is called when the image_writer has
@@ -1306,7 +1306,7 @@ class SpinCamera(QtCore.QObject):
         self.imageSaved.emit(self, filename)
 
 
-    @QtCore.pyqtSlot(str, str)
+    @QtCore.Slot(str, str)
     def image_writer_error(self, camera_name, error_string):
         '''
         The image_writer_error slot is called when the image_writer runs into
@@ -1316,7 +1316,7 @@ class SpinCamera(QtCore.QObject):
         self.error.emit(self.camera_name, error_string)
 
 
-    @QtCore.pyqtSlot(str,str, int, int, datetime.datetime, datetime.datetime)
+    @QtCore.Slot(str,str, int, int, datetime.datetime, datetime.datetime)
     def image_writer_video_closed(self, cam, filename, start_frame, end_frame, start_time, end_time):
         '''
         The image_writer_video_closed slot is called when the image_writer has
@@ -1327,7 +1327,7 @@ class SpinCamera(QtCore.QObject):
         self.videoSaved.emit(cam, filename, start_frame, end_frame, start_time, end_time)
 
 
-    @QtCore.pyqtSlot(list)
+    @QtCore.Slot(list)
     def stop_acquisition(self, cam_list):
 
         #  check that we're supposed to stop
@@ -1531,7 +1531,7 @@ class CameraEventHandler(QtCore.QObject, PySpin.DeviceEventHandler):
     exposure method in a thread safe way.
     """
 
-    endExposure = QtCore.pyqtSignal(str)
+    endExposure = QtCore.Signal(str)
 
     def __init__(self, eventname, cam_obj):
         """

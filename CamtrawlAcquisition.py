@@ -38,7 +38,7 @@ import os
 import shutil
 import datetime
 from AcquisitionBase import AcquisitionBase
-from PyQt5 import QtCore
+from PySide6 import QtCore
 import CamtrawlController
 
 
@@ -188,7 +188,7 @@ class CamtrawlAcquisition(AcquisitionBase):
         self.controller.startController()
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def ExternalTriggerReceived(self):
         '''
         ExternalTriggerReceived slot is called when the controller detects an external trigger
@@ -205,7 +205,7 @@ class CamtrawlAcquisition(AcquisitionBase):
                 print("ExternTrig3")
         
 
-    @QtCore.pyqtSlot(str, str, datetime.datetime, dict)
+    @QtCore.Slot(str, str, datetime.datetime, dict)
     def ControllerParamData(self, sensor_id, header, rx_time, data):
         '''
         ControllerParamData slot is called when the Camtrawl controller
@@ -241,7 +241,7 @@ class CamtrawlAcquisition(AcquisitionBase):
                 self.logger.info("    Shutdown voltage threshold: %8.4f" % (data['shutdown_threshold']))
 
 
-    @QtCore.pyqtSlot(int)
+    @QtCore.Slot(int)
     def ControllerStateChanged(self, new_state):
         '''
         the ControllerStateChanged slot is called when the Camtrawl controller emits
@@ -398,7 +398,7 @@ class CamtrawlAcquisition(AcquisitionBase):
         self.controllerCurrentState = new_state
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def DelayedShutdownHandler(self):
         '''
         DelayedShutdownHandler is called after the shutdown delay timer expires.
@@ -415,7 +415,7 @@ class CamtrawlAcquisition(AcquisitionBase):
         self.controller.sendShutdownSignal()
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def CheckDiskFreeSpace(self):
         '''
         CheckDiskFreeSpace checks the available free space for the data directory and
@@ -450,7 +450,7 @@ class CamtrawlAcquisition(AcquisitionBase):
                         shutdown_on_exit=self.configuration['application']['shut_down_on_exit'])
 
 
-    @QtCore.pyqtSlot(str, str)
+    @QtCore.Slot(str, str)
     def ControllerError(self, device_name, error):
 
         if self.controllerStarting:
@@ -538,7 +538,7 @@ class CamtrawlAcquisition(AcquisitionBase):
             self.controller_port = {}
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def ControllerStopped(self):
         '''The ControllerStopped slot is called when the CamtrawlController's thread
         finishes running. During teardown we stop the controller, wait for it to signal
@@ -556,7 +556,7 @@ class CamtrawlAcquisition(AcquisitionBase):
         self.controller_port = {}
 
 
-    @QtCore.pyqtSlot(str, str, str)
+    @QtCore.Slot(str, str, str)
     def SetParameterRequest(self, module, parameter, value):
         '''SetParameterRequest is overridden from AcquisitionBase and handles Camtrawl
         controller specific parameter requests. "acquisition" requests will be
@@ -596,7 +596,7 @@ class CamtrawlAcquisition(AcquisitionBase):
             super().SetParameterRequest(module, parameter, value)
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def TriggerCameras(self):
         '''
         The TriggerCameras slot is called by the trigger timer and will "trigger"
@@ -628,7 +628,7 @@ class CamtrawlAcquisition(AcquisitionBase):
         super().TriggerCameras()
 
 
-    @QtCore.pyqtSlot(object, int, bool)
+    @QtCore.Slot(object, int, bool)
     def HWTriggerReady(self, cam, exposure_us, is_HDR):
         '''
         The HWTriggerReady slot is called by each hardware triggered camera when it
@@ -732,7 +732,10 @@ def signal_handler(signum, frame):
 
 
 if __name__ == "__main__":
+
     import sys
+    import signal
+    import win32api
     import argparse
 
     #  create a state variable to track if the user typed ctrl-c to exit
@@ -741,12 +744,10 @@ if __name__ == "__main__":
     #  Set up the handlers to trap ctrl-c
     if sys.platform == "win32":
         #  On Windows, we use win32api.SetConsoleCtrlHandler to catch ctrl-c
-        import win32api
         win32api.SetConsoleCtrlHandler(exitHandler, True)
     else:
         #  On linux we can use signal to get not only ctrl-c, but
         #  termination and hangup signals also.
-        import signal
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
         signal.signal(signal.SIGHUP, signal_handler)
@@ -772,6 +773,6 @@ if __name__ == "__main__":
             parent=app)
 
     #  and start the event loop
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 
 

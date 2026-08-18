@@ -37,7 +37,7 @@
 
 import datetime
 import logging
-from PyQt5 import QtCore
+from PySide6 import QtCore
 from SerialMonitor import SerialDevice
 
 
@@ -49,14 +49,14 @@ class CamtrawlController(QtCore.QObject):
     '''
 
     #  define CamtrawlController signals
-    sensorData = QtCore.pyqtSignal(str, str, datetime.datetime, str)
-    parameterData = QtCore.pyqtSignal(str, str, datetime.datetime, dict)
-    systemState = QtCore.pyqtSignal(int)
-    externalTrigger = QtCore.pyqtSignal()
-    txSerialData = QtCore.pyqtSignal(str, str)
-    error = QtCore.pyqtSignal(str,str)
-    stopDevice = QtCore.pyqtSignal(list)
-    controllerStopped = QtCore.pyqtSignal()
+    sensorData = QtCore.Signal(str, str, datetime.datetime, str)
+    parameterData = QtCore.Signal(str, str, datetime.datetime, dict)
+    systemState = QtCore.Signal(int)
+    externalTrigger = QtCore.Signal()
+    txSerialData = QtCore.Signal(str, str)
+    error = QtCore.Signal(str,str)
+    stopDevice = QtCore.Signal(list)
+    controllerStopped = QtCore.Signal()
 
 
     #  define the controller states
@@ -385,7 +385,7 @@ class CamtrawlController(QtCore.QObject):
         self.logger.debug("CamtrawlController sent: " + msg)
 
 
-    @QtCore.pyqtSlot(str, str, object)
+    @QtCore.Slot(str, str, object)
     def sensorDataReceived(self, sensorID, data, err):
         '''The sensorDataReceived slot is called when serial data is available
 
@@ -595,7 +595,7 @@ class CamtrawlController(QtCore.QObject):
             self.sensorData.emit(sensorID, header, rxTime, data)
 
 
-    @QtCore.pyqtSlot(str, object)
+    @QtCore.Slot(str, object)
     def serialError(self, sensorID, errorObj):
 
         self.logger.error("CamtrawlControl serial error [" + self.deviceParams['port']
@@ -606,7 +606,7 @@ class CamtrawlController(QtCore.QObject):
         self.error.emit('CamtrawlControl', str(errorObj.errText))
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def threadFinished(self):
         """
           threadFinished is called when the SerialDevice thread instance finishes

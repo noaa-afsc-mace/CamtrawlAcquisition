@@ -40,7 +40,7 @@ import logging
 import datetime
 import cv2
 from CamtrawlServer import CamtrawlClient
-from PyQt5 import QtCore
+from PySide6 import QtCore
 
 
 class CamtrawlClientExample(QtCore.QObject):
@@ -63,8 +63,8 @@ class CamtrawlClientExample(QtCore.QObject):
     SENSOR_DATA_DATA = [['GPS','$GPRMC,235951.00,A,5635.8679,N,15335.9930,W,13.1,227.2,070524,13.3,E,D*2F'],
                         ['Temperature','$YCMTW,7.1,C,44.8,F']]
 
-    #  define PyQt Signals
-    stopApp = QtCore.pyqtSignal(bool)
+    #  define PySide Signals
+    stopApp = QtCore.Signal(bool)
 
 
     def __init__(self, host, port, compressed, scale, quality, txSensorData=False,
@@ -142,7 +142,7 @@ class CamtrawlClientExample(QtCore.QObject):
         timer.start(0)
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def SendSensorData(self):
         '''
         SendSensorData sends fake sensor data to the server as an example of
@@ -156,7 +156,7 @@ class CamtrawlClientExample(QtCore.QObject):
             self.client.setData(data[0], data[1], time=sensorTime)
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def RequestSensorData(self):
         '''
         getSensorData sends a request to the server for sensor data. In this example
@@ -170,7 +170,7 @@ class CamtrawlClientExample(QtCore.QObject):
         #self.client.getData(sensorID='GPS')
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def connectToServer(self):
         '''
         connectToServer is called by a timer after the application is instantiated and
@@ -190,7 +190,7 @@ class CamtrawlClientExample(QtCore.QObject):
         self.client.disconnectFromServer()
 
 
-    @QtCore.pyqtSlot(str, str, dict)
+    @QtCore.Slot(str, str, dict)
     def imageReceived(self, camera, label, imageData):
         '''
         the imageReceived slot is called when the client receives an image from the server.
@@ -276,7 +276,7 @@ class CamtrawlClientExample(QtCore.QObject):
                 quality=self.quality)
 
 
-    @QtCore.pyqtSlot(str, str, datetime.datetime, str)
+    @QtCore.Slot(str, str, datetime.datetime, str)
     def ReceiveSensorData(self, sensor_id, header, time, data):
         '''
         The ReceiveSensorData slot is called when the client receives the response
@@ -287,7 +287,7 @@ class CamtrawlClientExample(QtCore.QObject):
                 " : "  + data)
 
 
-    @QtCore.pyqtSlot(str, str, str, bool, str)
+    @QtCore.Slot(str, str, str, bool, str)
     def ReceiveParamData(self, module, parameter, value, ok, err_string):
         '''
         The ReceiveParamData slot is called when the client receives a response from
@@ -298,7 +298,7 @@ class CamtrawlClientExample(QtCore.QObject):
             " parameter: " + parameter + " value:" + value + " ok:" + str(ok))
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def connected(self):
 
         #  create a dict that will contain our image data
@@ -322,7 +322,7 @@ class CamtrawlClientExample(QtCore.QObject):
             self.sendSensorTimer.start(self.SENSOR_DATA_INTERVAL)
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def disconnected(self):
         '''
         disconnected is called when we disconnect from the server.
@@ -339,7 +339,7 @@ class CamtrawlClientExample(QtCore.QObject):
         QtCore.QCoreApplication.instance().quit()
 
 
-    @QtCore.pyqtSlot(int, str)
+    @QtCore.Slot(int, str)
     def clientError(self, errnum, errorText):
         '''
         the clientError slot is called when the client encounters an error
@@ -356,7 +356,7 @@ class CamtrawlClientExample(QtCore.QObject):
         QtCore.QCoreApplication.instance().quit()
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def shutdown(self):
         '''
         shutdown is called when the stopApp signal is received. It will disconnect from the server

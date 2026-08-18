@@ -37,7 +37,7 @@ import datetime
 import shlex
 import subprocess as sp
 import numpy as np
-from PyQt5 import QtCore
+from PySide6 import QtCore
 import cv2
 
 
@@ -70,10 +70,10 @@ class ImageWriter(QtCore.QObject):
 
 
     #  define PyQt Signals
-    writeComplete = QtCore.pyqtSignal(str, str)
-    writerStopped = QtCore.pyqtSignal(str)
-    videoFileClosed = QtCore.pyqtSignal(str,str, int, int, datetime.datetime, datetime.datetime)
-    error = QtCore.pyqtSignal(str, str)
+    writeComplete = QtCore.Signal(str, str)
+    writerStopped = QtCore.Signal(str)
+    videoFileClosed = QtCore.Signal(str,str, int, int, datetime.datetime, datetime.datetime)
+    error = QtCore.Signal(str, str)
 
 
     def __init__(self, camera_name, parent=None):
@@ -117,7 +117,7 @@ class ImageWriter(QtCore.QObject):
                 self.use_hardware_encoder = True
 
 
-    @QtCore.pyqtSlot(str, dict)
+    @QtCore.Slot(str, dict)
     def WriteImage(self, camera_name, image_data):
         '''The WriteImage slot writes image data to disk. It
         '''
@@ -238,7 +238,7 @@ class ImageWriter(QtCore.QObject):
                 self.error.emit(self.camera_name, 'write_image Error: %s' % ex)
 
 
-    @QtCore.pyqtSlot(str, int, int, int)
+    @QtCore.Slot(str, int, int, int)
     def StartRecording(self, filename, width, height, image_number, image_dims):
 
         #  Set our start video metadata params
@@ -357,7 +357,7 @@ class ImageWriter(QtCore.QObject):
             self.error.emit(self.camera_name, 'Start Recording Error: %s' % ex)
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def StopRecording(self, signal_stop=True):
         '''the StopRecording slot will close the video file (if writing a video)
         and emit the writerStopped signal when done. If we're just writing stills

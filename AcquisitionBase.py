@@ -46,7 +46,7 @@ import shutil
 #  import order seems to matter on linux. QtCore and QtSql (in metadata_db)
 #  have to be imported before (I think) cv2. If not you get a weird error
 #  loading a shared library when importing them.
-from PyQt5 import QtCore
+from PySide6 import QtCore
 from pathlib import Path
 from metadata_db import metadata_db
 import google.protobuf
@@ -137,14 +137,14 @@ class AcquisitionBase(QtCore.QObject):
     #  gross misconfigurations filling up the disk copying the wrong directory.
     MAX_CAL_FOLDER_FILES = 10
 
-    #  define PyQt Signals
-    sensorData = QtCore.pyqtSignal(str, str, datetime.datetime, str)
-    stopAcquiring = QtCore.pyqtSignal(list)
-    startAcquiring = QtCore.pyqtSignal((list, str, bool, dict, bool, dict))
-    trigger = QtCore.pyqtSignal(list, int, datetime.datetime, bool, bool)
-    stopServer = QtCore.pyqtSignal()
-    parameterChanged = QtCore.pyqtSignal(str, str, str, bool, str)
-    stopApp = QtCore.pyqtSignal(bool)
+    #  define PySide Signals
+    sensorData = QtCore.Signal(str, str, datetime.datetime, str)
+    stopAcquiring = QtCore.Signal(list)
+    startAcquiring = QtCore.Signal((list, str, bool, dict, bool, dict))
+    trigger = QtCore.Signal(list, int, datetime.datetime, bool, bool)
+    stopServer = QtCore.Signal()
+    parameterChanged = QtCore.Signal(str, str, str, bool, str)
+    stopApp = QtCore.Signal(bool)
 
     def __init__(self, config_file=None, profiles_file=None, parent=None):
 
@@ -408,7 +408,7 @@ class AcquisitionBase(QtCore.QObject):
         self.logger.info('Numpy version: %s' % (np.__version__))
         self.logger.info('OpenCV version: %s' % (cv2.__version__))
         self.logger.info('protobuf version: %s' % (google.protobuf.__version__))
-        self.logger.info('PyQt version: %s' % (QtCore.QT_VERSION_STR))
+        self.logger.info('PySide version: %s' % (QtCore.QT_VERSION_STR))
         self.logger.info("CamtrawlAcquisition version: " + self.VERSION)
 
         #  create a list of enumerated cameras and determine what camera drivers
@@ -749,7 +749,7 @@ class AcquisitionBase(QtCore.QObject):
                 self.StopAcquisition(exit_app=True, shutdown_on_exit=False)
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def CheckDiskFreeSpace(self):
         '''
         CheckDiskFreeSpace checks the available free space for the data directory and
@@ -1191,7 +1191,7 @@ class AcquisitionBase(QtCore.QObject):
             return False
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def TriggerTimeout(self):
         '''
         The TriggerTimeout slot is called by the trigger timeout timer. This
@@ -1208,7 +1208,7 @@ class AcquisitionBase(QtCore.QObject):
         self.TriggerCameras()
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def TriggerCameras(self):
         '''
         The TriggerCameras slot is called by the trigger timer and will "trigger"
@@ -1270,7 +1270,7 @@ class AcquisitionBase(QtCore.QObject):
                         #        sensor_id, header, self.syncdSensorData[sensor_id][header]['data'])
 
 
-    @QtCore.pyqtSlot(str, str, dict)
+    @QtCore.Slot(str, str, dict)
     def CamImageAcquired(self, cam_name, cam_label, image_data):
         '''CamImageAcquired is called when a camera has acquired an image
         or timed out waiting for one.
@@ -1317,7 +1317,7 @@ class AcquisitionBase(QtCore.QObject):
                         exp: {image_data['exposure']}  gain: {image_data['gain']}  filename: {filename}""")
 
 
-    @QtCore.pyqtSlot(object, bool)
+    @QtCore.Slot(object, bool)
     def CamTriggerComplete(self, cam_obj, triggered):
         '''CamTriggerComplete is called when a camera has completed a trigger event.
         This is called regardless of whether an image was received and/or the camera
@@ -1388,7 +1388,7 @@ class AcquisitionBase(QtCore.QObject):
                     self.triggerTimer.start(next_int_time_ms)
 
 
-    @QtCore.pyqtSlot(str, str)
+    @QtCore.Slot(str, str)
     def LogCamError(self, cam_name, error_str):
         '''
         The LogCamError slot is called when a camera runs into an error. For now
@@ -1398,7 +1398,7 @@ class AcquisitionBase(QtCore.QObject):
         self.logger.error(cam_name + ':ERROR:' + error_str)
 
 
-    @QtCore.pyqtSlot(str, str, int, int, datetime.datetime, datetime.datetime)
+    @QtCore.Slot(str, str, int, int, datetime.datetime, datetime.datetime)
     def LogVideoMetadata(self, cam_name, filename, start_frame, end_frame, start_time, end_time):
         '''
         The LogVideoMetadata slot is called when a camera closes a video file. The video's
@@ -1411,7 +1411,7 @@ class AcquisitionBase(QtCore.QObject):
         self.db.add_video(cam_name, filename, start_frame, end_frame, start_time, end_time)
 
 
-    @QtCore.pyqtSlot(str)
+    @QtCore.Slot(str)
     def LogServerError(self, error_str):
         '''
         The LogServerError slot is called when a CamtrawlServer runs into an error.
@@ -1421,7 +1421,7 @@ class AcquisitionBase(QtCore.QObject):
         self.logger.error('CamtrawlServer:ERROR:' + error_str)
 
 
-    @QtCore.pyqtSlot(object, str, bool)
+    @QtCore.Slot(object, str, bool)
     def AcquisitionStarted(self, cam_obj, cam_name, success):
         '''
         The AcquisitionStarted slot is called when a camera responds to the
@@ -1434,7 +1434,7 @@ class AcquisitionBase(QtCore.QObject):
             #  NEED TO CLOSE THIS CAMERA?
 
 
-    @QtCore.pyqtSlot(object, str, bool)
+    @QtCore.Slot(object, str, bool)
     def AcquisitionStopped(self, cam_obj, cam_name, success):
         '''
         The AcquisitionStopped slot is called when a camera responds to the
@@ -1544,7 +1544,7 @@ class AcquisitionBase(QtCore.QObject):
         delayTimer.start(500)
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def ServerStopped(self):
         '''The ServerStopped slot is called when the CamtrawlServer shuts down
         '''
@@ -1552,7 +1552,7 @@ class AcquisitionBase(QtCore.QObject):
         self.server_finished = True
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def AcqisitionTeardownTimeout(self):
         '''AcqisitionTeardownTimeout is called periodically after the initial teardown
         steps have been executed. Here we check if these initial steps have completed.
@@ -1811,7 +1811,7 @@ class AcquisitionBase(QtCore.QObject):
                 self.n_images = max_num + 1
 
 
-    @QtCore.pyqtSlot(str, str, object)
+    @QtCore.Slot(str, str, object)
     def SerialDataReceived(self, sensor_id, data, err):
         '''SerialDataReceived is called when we receive data from a serial based sensor. This
         method will get the time, parse the header (or optionally add a header) and then call
@@ -1840,7 +1840,7 @@ class AcquisitionBase(QtCore.QObject):
             self.SensorDataAvailable(sensor_id, header, rx_time, data)
 
 
-    @QtCore.pyqtSlot()
+    @QtCore.Slot()
     def SerialDevicesStopped(self):
         '''The SerialDevicesStopped slot is called when all serial device threads have
         finsihed.
@@ -1849,14 +1849,14 @@ class AcquisitionBase(QtCore.QObject):
         self.serial_threads_finished = True
 
 
-    @QtCore.pyqtSlot(str, object)
+    @QtCore.Slot(str, object)
     def SerialDeviceError(self, device, err):
         '''The SerialDeviceError slot is called when a sensor serial device emits an error
         '''
         self.logger.error("ERROR: serial device '" + device + "': " + str(err))
 
 
-    @QtCore.pyqtSlot(str, str)
+    @QtCore.Slot(str, str)
     def GetParameterRequest(self, module, parameter):
         '''The GetParameterRequest slot is called when a GetParameter command is sent ro the
         CamtrawlServer. Here we intercept and act on parameters that are common to AcquisitionBase.
@@ -1901,7 +1901,7 @@ class AcquisitionBase(QtCore.QObject):
                         self.parameterChanged.emit(module, parameter, str(param_value), 1, '')
 
 
-    @QtCore.pyqtSlot(str, str, str)
+    @QtCore.Slot(str, str, str)
     def SetParameterRequest(self, module, parameter, value):
         '''The SetParameterRequest slot is called when a SetParameter command is sent to the
         CamtrawlServer. Here we intercept and act on parameters that are common to AcquisitionBase
@@ -2002,7 +2002,7 @@ class AcquisitionBase(QtCore.QObject):
                 self.serialSensors.txData(params[0], value)
 
 
-    @QtCore.pyqtSlot(str, str, datetime.datetime, str)
+    @QtCore.Slot(str, str, datetime.datetime, str)
     def SensorDataAvailable(self, sensor_id, header, rx_time, data):
         '''
         The SensorDataAvailable slot is called when sensor data is received.
